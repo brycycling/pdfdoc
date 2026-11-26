@@ -396,7 +396,7 @@ async function openBytes(bytes,name,saved){
     let f=S.fmap.get(a.fieldName);
     if(!f){f={name:a.fieldName,type,multi:!!a.multiLine,options:(a.options||[]).map(o=>({v:String(o.exportValue??o.displayValue),t:String(o.displayValue??o.exportValue)})),maxLen:a.maxLen||0,ro:!!a.readOnly,alt:(a.alternativeText||'').trim(),widgets:[],page:n,auto:''};S.fmap.set(f.name,f);S.fields.push(f);
      S.values[f.name]=(type==='text'||type==='select')?String(Array.isArray(a.fieldValue)?(a.fieldValue[0]??''):(a.fieldValue??'')):''}
-    const w={f,rect:a.rect,page:n,on:String(type==='radio'?a.buttonValue:(a.exportValue||'Yes')),t:''};
+    const w={f,id:a.id,rect:a.rect,page:n,on:String(type==='radio'?a.buttonValue:(a.exportValue||'Yes')),t:''};
     if(type==='checkbox'&&a.fieldValue&&a.fieldValue!=='Off'&&a.fieldValue===w.on)S.values[f.name]=w.on;
     if(type==='radio'&&a.fieldValue&&a.fieldValue===a.buttonValue)S.values[f.name]=w.on;
     f.widgets.push(w);info.widgets.push(w)}
@@ -666,8 +666,8 @@ function drawField(pages,font,f,txt){const L=window.PDFLib;for(const w of f.widg
 function drawMark(pages,f,v){const L=window.PDFLib;for(const w of f.widgets){if(v!==w.on)continue;const p=pages[w.page-1];if(!p)continue;const[x1,y1,x2,y2]=nrect(w.rect);const s=Math.min(x2-x1,y2-y1);
  if(f.type==='radio')p.drawCircle({x:(x1+x2)/2,y:(y1+y2)/2,size:s*.24,color:L.rgb(0,0,0)});
  else p.drawSvgPath(`M ${s*.18} ${s*.55} L ${s*.42} ${s*.78} L ${s*.84} ${s*.22}`,{x:x1+((x2-x1)-s)/2,y:y1+((y2-y1)+s)/2,borderColor:L.rgb(0,0,0),borderWidth:Math.max(.8,s*.13),borderLineCap:L.LineCapStyle.Round})}}
-async function drawOverlays(d,pages,font,safe){const L=window.PDFLib;
- for(const o of S.overlays){const p=pages[o.page-1];if(!p)continue;const c=rgbHex(o.color);
+async function drawOverlays(d,pages,font,safe,offs){const L=window.PDFLib;
+ for(const o0 of S.overlays){const p=pages[o0.page-1];if(!p)continue;const off=offs?.[o0.page-1];const o=off?{...o0,x:o0.x-off.dx,y:o0.y-off.dy}:o0;const c=rgbHex(o.color);
   if(o.kind==='text'){safe(o.text).split('\n').forEach((ln,i)=>{if(ln)p.drawText(ln,{x:o.x+1,y:o.y-o.size*(0.95+i*1.2),size:o.size,font,color:c})})}
   else if(o.kind==='check')p.drawSvgPath(`M ${o.w*.15} ${o.h*.55} L ${o.w*.4} ${o.h*.8} L ${o.w*.85} ${o.h*.18}`,{x:o.x,y:o.y,borderColor:c,borderWidth:Math.max(.8,Math.min(o.w,o.h)*.13),borderLineCap:L.LineCapStyle.Round});
   else if(o.kind==='cross'){const t=Math.max(.8,Math.min(o.w,o.h)*.12);p.drawLine({start:{x:o.x+o.w*.18,y:o.y-o.h*.18},end:{x:o.x+o.w*.82,y:o.y-o.h*.82},thickness:t,color:c,lineCap:L.LineCapStyle.Round});p.drawLine({start:{x:o.x+o.w*.82,y:o.y-o.h*.18},end:{x:o.x+o.w*.18,y:o.y-o.h*.82},thickness:t,color:c,lineCap:L.LineCapStyle.Round})}
@@ -709,14 +709,37 @@ async function buildSafe(){
  for(const f of S.fields){const v=S.values[f.name];if(!v)continue;
   try{if(f.type==='checkbox'||f.type==='radio')drawMark(pages,f,v);else drawField(pages,font,f,safe(f.type==='select'?(f.options.find(o=>o.v===v)?.t||v):v))}catch(e){console.warn('field',f.name,e)}}
  await drawOverlays(d,pages,font,safe);return{out:await d.save({updateFieldAppearances:false}),issues:[],safe:true}}
-$('#dl').onclick=async()=>{if(!S.doc)return;busy(true);let res;
- try{res=await build($('#flat').checked)}catch(e){console.warn('Normal export failed, using fallback:',e);
-  try{res=await buildSafe()}catch(e2){busy(false);console.error(e2);toast('Could not build the PDF: '+(e2?.message||e2),true);return}}
+/* Encrypted PDFs (common for government forms): pdf-lib can't decrypt them, but pdf.js can.
+   pdf.js writes the answers into the original file, keeping its encryption and its fields. */
+function fillStorage(){const st=S.pdf.annotationStorage;
+ for(const f of S.fields){const v=S.values[f.name]??'';for(const w of f.widgets){if(!w.id)continue;
+  if(f.type==='checkbox'||f.type==='radio')st.setValue(w.id,{value:v===w.on});else st.setValue(w.id,{value:String(v)})}}}
+async function buildViaPdfjs(){fillStorage();return{out:await S.pdf.saveDocument(),issues:[],kept:true}}
+/* Last resort for anything pdf-lib can't edit: each page is rendered (with the answers) to an image,
+   and added text, marks and signatures are drawn on top as real vector content. */
+async function buildRaster(){const L=window.PDFLib;fillStorage();const d=await L.PDFDocument.create();const pages=[],offs=[];
+ for(const info of S.pages){const v1=info.pg.getViewport({scale:1}),vp=info.pg.getViewport({scale:2.5});const c=document.createElement('canvas');c.width=Math.ceil(vp.width);c.height=Math.ceil(vp.height);
+  const x=c.getContext('2d');x.fillStyle='#fff';x.fillRect(0,0,c.width,c.height);
+  await info.pg.render({canvasContext:x,viewport:vp,annotationMode:PJ.AnnotationMode.ENABLE_STORAGE,intent:'print'}).promise;
+  const blob=await new Promise(r=>c.toBlob(r,'image/jpeg',.9));const img=await d.embedJpg(await blob.arrayBuffer());
+  const pg=d.addPage([v1.width,v1.height]);pg.drawImage(img,{x:0,y:0,width:v1.width,height:v1.height});pages.push(pg);offs.push({dx:info.pg.view[0],dy:info.pg.view[1]})}
+ const font=await d.embedFont(L.StandardFonts.Helvetica);await drawOverlays(d,pages,font,mkSafe(font),offs);
+ return{out:await d.save(),issues:[],raster:true}}
+async function isEncrypted(){if(S.doc.enc!=null)return S.doc.enc;try{const d=await PDFLib.PDFDocument.load(S.doc.bytes,{ignoreEncryption:true,throwOnInvalidObject:false,updateMetadata:false});S.doc.enc=!!d.isEncrypted}catch{S.doc.enc=true}return S.doc.enc}
+$('#dl').onclick=async()=>{if(!S.doc)return;busy(true);let res=null;const flatten=$('#flat').checked;
+ try{
+  if(await isEncrypted()){
+   if(!S.overlays.length&&!flatten){try{res=await buildViaPdfjs()}catch(e){console.warn('pdf.js save failed:',e)}}
+   if(!res)res=await buildRaster();
+  }else{
+   try{res=await build(flatten)}catch(e){console.warn('Normal export failed:',e);
+    try{res=await buildSafe()}catch(e2){console.warn('Safe export failed:',e2);res=await buildRaster()}}}
+ }catch(e){busy(false);console.error(e);toast('Could not build the PDF: '+(e?.message||e),true);return}
  busy(false);
  const name=S.doc.name.replace(/\.pdf$/i,'')+'-filled.pdf';const blob=new Blob([res.out],{type:'application/pdf'});
  if(DL){try{await DL.save({filename:name,data:blob});S.dirty=false;toast('Saved '+name)}catch(e){toast(e?.code==='declined'?'Download cancelled.':e?.code==='rate_limited'?'A save prompt is already open.':'Download failed: '+(e?.message||e?.code||e),true);return}}
  else{const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),5000);S.dirty=false;toast('Downloaded '+name)}
- const note=res.safe?'This PDF’s form internals are damaged, so your answers were written onto the page. The download looks right but its fields can’t be edited again.':res.drawn?`${res.drawn} field${res.drawn>1?'s':''} couldn’t be filled as form fields, so ${res.drawn>1?'they were':'it was'} written onto the page instead.`:res.issues.length?'Could not set: '+res.issues.slice(0,4).join(', '):'';
+ const note=res.raster?'This PDF is protected or damaged, so the download is a flattened copy: each page is an image with your entries and marks on top. It can’t be edited again.':res.safe?'This PDF’s form internals are damaged, so your answers were written onto the page. The download looks right but its fields can’t be edited again.':res.drawn?`${res.drawn} field${res.drawn>1?'s':''} couldn’t be filled as form fields, so ${res.drawn>1?'they were':'it was'} written onto the page instead.`:res.issues.length?'Could not set: '+res.issues.slice(0,4).join(', '):'';
  if(note)setTimeout(()=>toast(note,res.safe),1400)};
 
 /* ---------- sample form ---------- */

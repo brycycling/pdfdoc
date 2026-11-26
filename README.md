@@ -26,6 +26,7 @@ Everything runs locally: profiles and signature in localStorage, the library in 
 
 ## Limitations
 
-- XFA (Adobe LiveCycle) forms can't be filled as forms; write on them with the tools instead.
+- Encrypted PDFs (common for government forms such as Service Canada's) are filled through pdf.js, which keeps the original encryption, fields and XFA data. If you also add text, marks or a signature, or choose Flatten, the download is a flattened copy: each page becomes an image with your entries drawn on top.
+- Pure XFA (Adobe LiveCycle) forms with no regular form fields can't be filled as forms; write on them with the tools instead.
 - Text and marks added on pages stored rotated inside the PDF may not line up.
 - Added text uses Helvetica, so characters outside Western European sets are replaced.
