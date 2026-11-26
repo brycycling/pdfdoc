@@ -21,6 +21,7 @@
 --field:rgba(196,232,140,.42)}
 :root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
 *{box-sizing:border-box;min-width:0}
+[hidden]{display:none!important}
 html,body{height:100%}
 body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Inter,system-ui,sans-serif;overflow:hidden;display:grid;grid-template-rows:auto 1fr}
 button,input,select,textarea{font:inherit;color:inherit}
@@ -150,7 +151,18 @@ details summary{cursor:pointer;font-size:13px;color:var(--mute);margin-top:16px}
 .card{background:var(--panel);border-radius:16px;padding:22px;width:min(640px,100%);box-shadow:0 20px 60px rgba(0,0,0,.3)}
 .card h2{font-size:22px;margin-bottom:6px}
 .card p{color:var(--mute);margin:0 0 14px}
-#sigc{width:100%;aspect-ratio:3/1;background:#fff;border:1px solid var(--line);border-radius:10px;touch-action:none;cursor:crosshair;display:block}
+#sigc,#sigpv{width:100%;aspect-ratio:3/1;background:#fff;border:1px solid var(--line);border-radius:10px;touch-action:none;cursor:crosshair;display:block}
+.seg{display:inline-flex;background:var(--soft);border-radius:10px;padding:3px;margin:4px 0 12px}
+.seg button{height:36px;padding:0 14px;border:0;border-radius:8px;background:none;font-size:14px;font-weight:500;color:var(--mute)}
+.seg button.on{background:var(--panel);color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.12)}
+.sigdrop{position:relative;border-radius:10px;cursor:pointer}
+.sigdrop.over{outline:2px dashed var(--g);outline-offset:3px}
+#sigpv{cursor:pointer;background:#fff conic-gradient(#eef1ef 25%,#fff 0 50%,#eef1ef 0 75%,#fff 0) 0 0/18px 18px}
+.sigempty{position:absolute;inset:0;display:grid;place-content:center;justify-items:center;gap:4px;color:#4d5d58;text-align:center;font-size:14px}
+.sigempty span{font-size:12.5px;color:#7a8a85}
+.sigopts{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;margin-top:12px;font-size:13.5px}
+.chk{display:flex;align-items:center;gap:7px}.chk input{width:17px;height:17px;accent-color:var(--g)}
+.rng{display:flex;align-items:center;gap:8px;color:var(--mute)}.rng input[type=range]{width:120px;accent-color:var(--g)}
 .foot{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:16px}
 #toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:#0b1f1a;color:#fff;padding:11px 16px;border-radius:10px;font-size:14px;opacity:0;pointer-events:none;transition:.2s;z-index:70;max-width:min(520px,90vw)}
 #toast.on{opacity:1;transform:translateX(-50%)}
@@ -259,7 +271,7 @@ details summary{cursor:pointer;font-size:13px;color:var(--mute);margin-top:16px}
       <button class="btn sm" id="kvadd">Add a detail</button>
       <label class="f">Signature</label>
       <div class="sig" id="sigprev">No signature yet</div>
-      <div class="row"><button class="btn sm" id="sigdraw">Draw</button><label class="btn sm">Upload image<input type="file" id="sigup" accept="image/png,image/jpeg" hidden></label><button class="btn sm" id="sigdel">Remove</button></div>
+      <div class="row"><button class="btn sm" id="sigdraw">Draw</button><label class="btn sm">Upload image<input type="file" id="sigup" accept="image/*" hidden></label><button class="btn sm" id="sigdel">Remove</button></div>
       <label class="f" for="datefmt">Date format</label>
       <select class="inp" id="datefmt"><option>YYYY-MM-DD</option><option>DD/MM/YYYY</option><option>MM/DD/YYYY</option><option>MMM D, YYYY</option><option>D MMMM YYYY</option></select>
       <div style="margin-top:18px"><button class="btn go" id="prapply" disabled>Apply profile to this form</button></div>
@@ -477,7 +489,7 @@ async function place(tool,info,px,py){
  if(tool==='text'||tool==='date'){const size=S.fsize,h=size*1.2+1;o={id:uid(),kind:'text',page:info.n,x:px-2,y:py+h/2,w:tool==='date'?60:120,h,size,text:tool==='date'?today():'',label:'',color};
   if(!info.items)info.items=await textItems(info.pg);o.label=tool==='date'?'Date':nearLeft(info.items,[o.x,o.y-h,o.x+o.w,o.y],[...info.widgets.map(w=>w.rect),...S.overlays.filter(x=>x.page===info.n).map(x=>[x.x,x.y-x.h,x.x+x.w,x.y])]);fitText(o)}
  else if(tool==='check'||tool==='cross'){const s=11;o={id:uid(),kind:tool,page:info.n,x:px-s/2,y:py+s/2,w:s,h:s,color}}
- else if(tool==='sig'){const pr=curProfile();if(!pr.sig){toast('Draw or upload your signature first.');drawSig(()=>place(tool,info,px,py));return}
+ else if(tool==='sig'){const pr=curProfile();if(!pr.sig){toast('Add your signature: draw it or upload an image.');drawSig(()=>place(tool,info,px,py));return}
   const w=130,h=w/(pr.sig.ratio||3);o={id:uid(),kind:'sig',page:info.n,x:px-w/2,y:py+h/2,w,h,ratio:pr.sig.ratio||3,src:pr.sig.src,color}}
  S.overlays.push(o);S.dirty=true;info.el.querySelector('.ol').appendChild(ovEl(o));S.sel=null;select(o.id);
  if(o.kind==='text'){$(`.ov[data-id="${o.id}"] textarea`)?.focus();setTool('fill')}else if(o.kind==='sig')setTool('fill');
@@ -567,21 +579,53 @@ $('#prapply').onclick=()=>{const p=curProfile();const items=p.items.filter(i=>i.
  const props=[];for(const t of targets()){let best=null,bs=0;for(const it of items){const s=score(t.label,it.k);if(s>bs){bs=s;best=it}}if(best&&bs>=.6&&(t.type==='text'||t.type==='select'))props.push({t,value:expand(best.v),from:best.k})}
  review($('#prrev'),props,'Matches from '+p.name)};
 /* signature pad */
-function drawSig(after){modal(`<h2>Your signature</h2><p>Sign with a mouse, trackpad, finger or stylus. It is saved to the current profile in this browser only.</p><canvas id="sigc" width="900" height="300"></canvas><div class="foot"><button class="btn" data-a="clr">Clear</button><button class="btn" data-a="n">Cancel</button><button class="btn go" data-a="y">Save signature</button></div>`,(c,close)=>{
+function drawSig(after,file){modal(`<h2>Your signature</h2><div class="seg" role="tablist"><button data-m="draw" class="on">Draw</button><button data-m="up">Upload image</button></div>
+<div data-p="draw"><p>Sign with a mouse, trackpad, finger or stylus.</p><canvas id="sigc" width="900" height="300"></canvas></div>
+<div data-p="up" hidden><p>Use a scan or phone photo of your signature on plain paper, or a PNG with a transparent background.</p>
+ <div class="sigdrop" id="sigdrop"><canvas id="sigpv" width="900" height="300"></canvas><div class="sigempty" id="sigempty">${ic('open',22)}<b>Choose an image</b><span>or drop it here · PNG, JPG, WebP</span></div><input type="file" id="sigfile" accept="image/*" hidden></div>
+ <div class="sigopts"><label class="chk"><input type="checkbox" id="sbg" checked> Remove background</label>
+ <label class="rng">Sensitivity<input type="range" id="ssens" min="0" max="100" value="45" aria-label="Background sensitivity"></label>
+ <label class="rng">Ink<select class="inp" id="sink" style="min-height:34px;font-size:14px;padding:4px 8px;width:auto"><option value="">As in image</option><option value="#1a1a1a">Black</option><option value="#1b3a8f">Blue</option></select></label>
+ <button class="btn sm" id="sigpick">Choose another</button></div></div>
+<p style="font-size:13px;margin:12px 0 0">Saved to the profile “${esc(curProfile().name)}” in this browser only.</p>
+<div class="foot"><button class="btn" data-a="clr">Clear</button><button class="btn" data-a="n">Cancel</button><button class="btn go" data-a="y">Save signature</button></div>`,(c,close)=>{
+ let mode='draw',img=null;
  const cv=$('#sigc',c),x=cv.getContext('2d');x.lineCap=x.lineJoin='round';x.strokeStyle=S.ink;x.lineWidth=4.5;let dn=false,last=null,any=false;
  const pt=e=>{const r=cv.getBoundingClientRect();return[(e.clientX-r.left)*cv.width/r.width,(e.clientY-r.top)*cv.height/r.height]};
  cv.onpointerdown=e=>{dn=true;last=pt(e);cv.setPointerCapture(e.pointerId)};
  cv.onpointermove=e=>{if(!dn)return;const p=pt(e);x.beginPath();x.moveTo(...last);const m=[(last[0]+p[0])/2,(last[1]+p[1])/2];x.quadraticCurveTo(last[0],last[1],m[0],m[1]);x.lineTo(...p);x.stroke();last=p;any=true};
  cv.onpointerup=()=>dn=false;
- c.onclick=e=>{const a=e.target.closest('[data-a]')?.dataset.a;if(a==='clr'){x.clearRect(0,0,cv.width,cv.height);any=false}if(a==='n')close();
-  if(a==='y'){if(!any){toast('Sign in the box first.');return}const s=trim(cv);if(s){curProfile().sig=s;savePR();renderProfile();close();after&&after()}}}})}
+ const setMode=m=>{mode=m;$$('.seg button',c).forEach(b=>b.classList.toggle('on',b.dataset.m===m));$$('[data-p]',c).forEach(d=>d.hidden=d.dataset.p!==m);$('[data-a="clr"]',c).hidden=m!=='draw'};
+ const pv=$('#sigpv',c);let out=null;
+ const opts=()=>({remove:$('#sbg',c).checked,sens:+$('#ssens',c).value/100,color:$('#sink',c).value});
+ const redraw=()=>{if(!img)return;out=sigProcess(img,opts());const px=pv.getContext('2d');px.clearRect(0,0,pv.width,pv.height);
+  const sc=Math.min(pv.width*.92/out.width,pv.height*.86/out.height);const w=out.width*sc,h=out.height*sc;px.drawImage(out,(pv.width-w)/2,(pv.height-h)/2,w,h);$('#sigempty',c).hidden=true};
+ const load=f=>{if(!f)return;if(!/^image\//.test(f.type)){toast('Choose an image file (PNG, JPG or WebP).',true);return}const im=new Image();
+  im.onload=()=>{img=im;setMode('up');redraw();URL.revokeObjectURL(im.src)};im.onerror=()=>toast('That image could not be read. Try a PNG or JPG.',true);im.src=URL.createObjectURL(f)};
+ const fi=$('#sigfile',c);fi.onchange=()=>{load(fi.files[0]);fi.value=''};
+ $('#sigdrop',c).onclick=()=>{if(!img)fi.click()};$('#sigpick',c).onclick=()=>fi.click();
+ const dz=$('#sigdrop',c);dz.ondragover=e=>{e.preventDefault();e.stopPropagation();dz.classList.add('over')};dz.ondragleave=()=>dz.classList.remove('over');
+ dz.ondrop=e=>{e.preventDefault();e.stopPropagation();dz.classList.remove('over');load([...e.dataTransfer.files].find(f=>/^image\//.test(f.type)))};
+ ['sbg','ssens','sink'].forEach(id=>$('#'+id,c).oninput=redraw);
+ c.onclick=e=>{const m=e.target.closest('[data-m]')?.dataset.m;if(m){setMode(m);if(m==='up'&&!img)fi.click();return}
+  const a=e.target.closest('[data-a]')?.dataset.a;if(a==='clr'){x.clearRect(0,0,cv.width,cv.height);any=false}if(a==='n')close();
+  if(a==='y'){let s=null;if(mode==='draw'){if(!any){toast('Sign in the box first.');return}s=trim(cv)}else{if(!out){toast('Choose an image first.');return}s=trim(out);if(!s){toast('Nothing left after removing the background. Lower the sensitivity.',true);return}}
+   if(s){curProfile().sig=s;savePR();renderProfile();close();toast('Signature saved.');after&&after()}}};
+ if(file)load(file)})}
+function sigProcess(im,{remove,sens,color}){const sc=Math.min(1,1400/im.naturalWidth,700/im.naturalHeight);const W=Math.max(1,Math.round(im.naturalWidth*sc)),H=Math.max(1,Math.round(im.naturalHeight*sc));
+ const cv=document.createElement('canvas');cv.width=W;cv.height=H;const x=cv.getContext('2d',{willReadFrequently:true});x.drawImage(im,0,0,W,H);const d=x.getImageData(0,0,W,H),p=d.data;
+ const lum=i=>.299*p[i]+.587*p[i+1]+.114*p[i+2];
+ let bg=255;if(remove){const b=[];const step=Math.max(1,Math.floor((W+H)/400));for(let i=0;i<W;i+=step){b.push(lum(i*4),lum(((H-1)*W+i)*4))}for(let y=0;y<H;y+=step){b.push(lum(y*W*4),lum((y*W+W-1)*4))}b.sort((a,c)=>a-c);bg=b[Math.floor(b.length*.6)]||255}
+ const lo=8+sens*70,hi=lo+45;const ink=color?[parseInt(color.slice(1,3),16),parseInt(color.slice(3,5),16),parseInt(color.slice(5,7),16)]:null;
+ for(let i=0;i<p.length;i+=4){let a=p[i+3]/255;if(remove){const dist=bg-lum(i);a*=clamp((dist-lo)/(hi-lo),0,1)}
+  if(ink&&a>0){p[i]=ink[0];p[i+1]=ink[1];p[i+2]=ink[2]}p[i+3]=Math.round(a*255)}
+ x.putImageData(d,0,0);return cv}
 function trim(cv){const x=cv.getContext('2d'),{width:W,height:H}=cv,d=x.getImageData(0,0,W,H).data;let a=W,b=H,c=0,e=0;
  for(let y=0;y<H;y++)for(let i=0;i<W;i++)if(d[(y*W+i)*4+3]>8){if(i<a)a=i;if(i>c)c=i;if(y<b)b=y;if(y>e)e=y}
  if(c<=a||e<=b)return null;a=Math.max(0,a-6);b=Math.max(0,b-6);c=Math.min(W,c+6);e=Math.min(H,e+6);const o=document.createElement('canvas');o.width=c-a;o.height=e-b;o.getContext('2d').drawImage(cv,a,b,c-a,e-b,0,0,c-a,e-b);return{src:o.toDataURL('image/png'),ratio:(c-a)/(e-b)}}
 $('#sigdraw').onclick=()=>drawSig();
 $('#sigdel').onclick=()=>{curProfile().sig=null;savePR();renderProfile()};
-$('#sigup').onchange=e=>{const f=e.target.files[0];if(!f)return;const im=new Image();im.onload=()=>{const cv=document.createElement('canvas');const sc=Math.min(1,900/im.width);cv.width=im.width*sc;cv.height=im.height*sc;const x=cv.getContext('2d');x.drawImage(im,0,0,cv.width,cv.height);
- const d=x.getImageData(0,0,cv.width,cv.height);for(let i=0;i<d.data.length;i+=4){const l=(d.data[i]+d.data[i+1]+d.data[i+2])/3;if(l>200)d.data[i+3]=0}x.putImageData(d,0,0);const s=trim(cv);if(s){curProfile().sig=s;savePR();renderProfile();toast('Signature saved. White background removed.')}URL.revokeObjectURL(im.src)};im.src=URL.createObjectURL(f);e.target.value=''};
+$('#sigup').onchange=e=>{const f=e.target.files[0];e.target.value='';if(f)drawSig(null,f)};
 
 /* ---------- paste values ---------- */
 $('#kvbtn').onclick=()=>{const T=targets();const props=[];const seen=new Set();
@@ -666,10 +710,10 @@ $('#samplebtn').onclick=async()=>{const b=await sample();if(b)openBytes(new Uint
 $('#openbtn').onclick=()=>$('#file').click();
 $('#file').onchange=e=>{openFile(e.target.files[0]);e.target.value=''};
 let dc=0;const hasFiles=e=>[...(e.dataTransfer?.types||[])].includes('Files');
-addEventListener('dragenter',e=>{if(!hasFiles(e))return;e.preventDefault();dc++;$('#dropcover').classList.add('on')});
+addEventListener('dragenter',e=>{if(!hasFiles(e)||$('#modal').classList.contains('on'))return;e.preventDefault();dc++;$('#dropcover').classList.add('on')});
 addEventListener('dragleave',e=>{if(!hasFiles(e))return;dc=Math.max(0,dc-1);if(!dc)$('#dropcover').classList.remove('on')});
 addEventListener('dragover',e=>{if(hasFiles(e))e.preventDefault()});
-addEventListener('drop',e=>{if(!hasFiles(e))return;e.preventDefault();dc=0;$('#dropcover').classList.remove('on');const f=[...e.dataTransfer.files].find(f=>/pdf/i.test(f.type)||/\.pdf$/i.test(f.name));f?openFile(f):toast('Drop a PDF file.',true)});
+addEventListener('drop',e=>{if(!hasFiles(e))return;e.preventDefault();if($('#modal').classList.contains('on'))return;dc=0;$('#dropcover').classList.remove('on');const f=[...e.dataTransfer.files].find(f=>/pdf/i.test(f.type)||/\.pdf$/i.test(f.name));f?openFile(f):toast('Drop a PDF file.',true)});
 
 /* ---------- tabs, keys, startup ---------- */
 $$('.tab').forEach(t=>t.onclick=()=>{$$('.tab').forEach(x=>x.classList.toggle('on',x===t));$$('.pane').forEach(p=>p.classList.toggle('on',p.id==='p-'+t.dataset.tab))});

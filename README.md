@@ -8,7 +8,7 @@ The earlier React + Supabase version now lives in [brycycling/pdfformfill](https
 
 - **Fillable forms**: AcroForm fields are detected and you type straight onto the page (text, multi-line, checkboxes, radio buttons, dropdowns). Cryptic field names like `Text7` get their label from the words printed beside them.
 - **Flat and scanned PDFs**: Text, Date, Check, Cross and Sign tools, in black or blue ink. Drag, resize, delete, undo and redo.
-- **Profiles**: reusable details (name, MSP number, clinic address, phone, fax…) and a saved signature. *Apply profile* matches each detail to the right field by label, keeping patient fields separate. `{today}` expands to the current date in your chosen format.
+- **Profiles**: reusable details (name, MSP number, clinic address, phone, fax…) and a saved signature, either drawn or uploaded as an image. Uploads from a scan or phone photo get the paper background removed (with adjustable sensitivity) and can be recoloured to black or blue ink. *Apply profile* matches each detail to the right field by label, keeping patient fields separate. `{today}` expands to the current date in your chosen format.
 - **Paste values**: paste `Label: value` lines and each is matched to the closest field. You review the matches before anything is applied. A blank template for the current form can be copied out.
 - **Library**: save forms in the browser (IndexedDB), with entries or as blank templates.
 - **Download**: saves the filled PDF, optionally flattened so answers can no longer be edited.
