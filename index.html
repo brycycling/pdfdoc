@@ -658,12 +658,26 @@ document.addEventListener('click',async e=>{const o=e.target.closest('[data-open
 
 /* ---------- export ---------- */
 const MAP={'‘':"'",'’':"'",'“':'"','”':'"','–':'-','—':'-','…':'...','•':'*','✓':'v','✔':'v',' ':' ','\t':'    '};
+function mkSafe(font){const cs=new Set(font.getCharacterSet());return s=>[...String(s||'')].map(ch=>ch==='\n'||cs.has(ch.codePointAt(0))?ch:(MAP[ch]??(ch.normalize('NFKD').replace(/[^\x20-\x7e]/g,'')||'?'))).join('')}
+const rgbHex=h=>{const L=window.PDFLib;const n=parseInt(String(h||'#1a1a1a').slice(1),16);return L.rgb((n>>16&255)/255,(n>>8&255)/255,(n&255)/255)};
+function drawField(pages,font,f,txt){const L=window.PDFLib;for(const w of f.widgets){const p=pages[w.page-1];if(!p)continue;const[x1,y1,x2,y2]=nrect(w.rect);const W=x2-x1-4;
+ if(f.multi){const sz=Math.min(10,Math.max(6,(y2-y1)/3));p.drawText(txt,{x:x1+2,y:y2-sz*1.1,size:sz,font,color:L.rgb(0,0,0),maxWidth:W,lineHeight:sz*1.2})}
+ else{const line=txt.replace(/\n/g,' ');let sz=Math.min(11,(y2-y1)*.68);const tw=font.widthOfTextAtSize(line,sz);if(tw>W&&tw>0)sz=Math.max(5,sz*W/tw);p.drawText(line,{x:x1+2,y:y1+((y2-y1)-sz*.72)/2,size:sz,font,color:L.rgb(0,0,0)})}}}
+function drawMark(pages,f,v){const L=window.PDFLib;for(const w of f.widgets){if(v!==w.on)continue;const p=pages[w.page-1];if(!p)continue;const[x1,y1,x2,y2]=nrect(w.rect);const s=Math.min(x2-x1,y2-y1);
+ if(f.type==='radio')p.drawCircle({x:(x1+x2)/2,y:(y1+y2)/2,size:s*.24,color:L.rgb(0,0,0)});
+ else p.drawSvgPath(`M ${s*.18} ${s*.55} L ${s*.42} ${s*.78} L ${s*.84} ${s*.22}`,{x:x1+((x2-x1)-s)/2,y:y1+((y2-y1)+s)/2,borderColor:L.rgb(0,0,0),borderWidth:Math.max(.8,s*.13),borderLineCap:L.LineCapStyle.Round})}}
+async function drawOverlays(d,pages,font,safe){const L=window.PDFLib;
+ for(const o of S.overlays){const p=pages[o.page-1];if(!p)continue;const c=rgbHex(o.color);
+  if(o.kind==='text'){safe(o.text).split('\n').forEach((ln,i)=>{if(ln)p.drawText(ln,{x:o.x+1,y:o.y-o.size*(0.95+i*1.2),size:o.size,font,color:c})})}
+  else if(o.kind==='check')p.drawSvgPath(`M ${o.w*.15} ${o.h*.55} L ${o.w*.4} ${o.h*.8} L ${o.w*.85} ${o.h*.18}`,{x:o.x,y:o.y,borderColor:c,borderWidth:Math.max(.8,Math.min(o.w,o.h)*.13),borderLineCap:L.LineCapStyle.Round});
+  else if(o.kind==='cross'){const t=Math.max(.8,Math.min(o.w,o.h)*.12);p.drawLine({start:{x:o.x+o.w*.18,y:o.y-o.h*.18},end:{x:o.x+o.w*.82,y:o.y-o.h*.82},thickness:t,color:c,lineCap:L.LineCapStyle.Round});p.drawLine({start:{x:o.x+o.w*.82,y:o.y-o.h*.18},end:{x:o.x+o.w*.18,y:o.y-o.h*.82},thickness:t,color:c,lineCap:L.LineCapStyle.Round})}
+  else if(o.kind==='sig'){const img=await d.embedPng(o.src);p.drawImage(img,{x:o.x,y:o.y-o.h,width:o.w,height:o.h})}}}
+function stripWidgets(d,page,all){const L=window.PDFLib;const an=page.node.Annots();if(!an)return;
+ for(let i=an.size()-1;i>=0;i--){try{const a=d.context.lookup(an.get(i));if(!a){an.remove(i);continue}if(all){const st=a.get?.(L.PDFName.of('Subtype'));if(st&&st.toString()==='/Widget')an.remove(i)}}catch{an.remove(i)}}}
+/* Normal export: keeps the form fillable. Every pdf-lib form call is guarded per field. */
 async function build(flatten){
- const L=window.PDFLib;const d=await L.PDFDocument.load(S.doc.bytes,{ignoreEncryption:true});const font=await d.embedFont(L.StandardFonts.Helvetica);
- const cs=new Set(font.getCharacterSet());const safe=s=>[...String(s||'')].map(ch=>ch==='\n'||cs.has(ch.codePointAt(0))?ch:(MAP[ch]??(ch.normalize('NFKD').replace(/[^\x20-\x7e]/g,'')||'?'))).join('');
- const issues=[];const pages=d.getPages();
- const rgbHex=h=>{const n=parseInt(String(h||'#1a1a1a').slice(1),16);return L.rgb((n>>16&255)/255,(n>>8&255)/255,(n&255)/255)};
- const drawIn=(f,txt)=>{for(const w of f.widgets){const p=pages[w.page-1];const[x1,y1,x2,y2]=nrect(w.rect);const sz=Math.min(11,(y2-y1)*.7);txt.split('\n').forEach((ln,i)=>p.drawText(ln,{x:x1+2,y:y2-sz*(1.05+i*1.2),size:sz,font,color:L.rgb(0,0,0),maxWidth:x2-x1-4}))}};
+ const L=window.PDFLib;const d=await L.PDFDocument.load(S.doc.bytes,{ignoreEncryption:true,throwOnInvalidObject:false});const font=await d.embedFont(L.StandardFonts.Helvetica);
+ const safe=mkSafe(font);const issues=[];const pages=d.getPages();const drawn=new Set();
  if(S.fields.length){let form=null;try{form=d.getForm()}catch{}
   for(const f of S.fields){const v=S.values[f.name]??'';if(v===(S.init[f.name]??''))continue;
    let pf=null;try{pf=form&&form.getField(f.name)}catch{}
@@ -672,21 +686,38 @@ async function build(flatten){
     else if(pf instanceof L.PDFCheckBox){v?pf.check():pf.uncheck()}
     else if(pf instanceof L.PDFRadioGroup){if(!v)pf.clear();else{const opts=pf.getOptions();if(opts.includes(v))pf.select(v);else{const i=f.widgets.findIndex(w=>w.on===v);if(i>=0&&opts[i]!=null)pf.select(opts[i]);else throw 0}}}
     else if(pf instanceof L.PDFDropdown||pf instanceof L.PDFOptionList){if(!v)pf.clear();else pf.select(safe(v))}
-    else throw 0}
-   catch(e){if(f.type==='text'&&v){try{if(pf instanceof L.PDFTextField)pf.setText('');}catch{}drawIn(f,safe(v));}else issues.push(label(f))}}
-  if(form){try{form.updateFieldAppearances(font)}catch{}if(flatten)try{form.flatten({updateFieldAppearances:false})}catch(e){issues.push('flattening')}}}
- for(const o of S.overlays){const p=pages[o.page-1];if(!p)continue;const c=rgbHex(o.color);
-  if(o.kind==='text'){safe(o.text).split('\n').forEach((ln,i)=>{if(ln)p.drawText(ln,{x:o.x+1,y:o.y-o.size*(0.95+i*1.2),size:o.size,font,color:c})})}
-  else if(o.kind==='check')p.drawSvgPath(`M ${o.w*.15} ${o.h*.55} L ${o.w*.4} ${o.h*.8} L ${o.w*.85} ${o.h*.18}`,{x:o.x,y:o.y,borderColor:c,borderWidth:Math.max(.8,Math.min(o.w,o.h)*.13),borderLineCap:L.LineCapStyle.Round});
-  else if(o.kind==='cross'){const t=Math.max(.8,Math.min(o.w,o.h)*.12);p.drawLine({start:{x:o.x+o.w*.18,y:o.y-o.h*.18},end:{x:o.x+o.w*.82,y:o.y-o.h*.82},thickness:t,color:c,lineCap:L.LineCapStyle.Round});p.drawLine({start:{x:o.x+o.w*.82,y:o.y-o.h*.18},end:{x:o.x+o.w*.18,y:o.y-o.h*.82},thickness:t,color:c,lineCap:L.LineCapStyle.Round})}
-  else if(o.kind==='sig'){const img=await d.embedPng(o.src);p.drawImage(img,{x:o.x,y:o.y-o.h,width:o.w,height:o.h})}}
- if(flatten){const n=await L.PDFDocument.create();const cp=await n.copyPages(d,d.getPageIndices());cp.forEach(pg=>{n.addPage(pg);const an=pg.node.Annots();if(an)for(let i=an.size()-1;i>=0;i--){try{if(!n.context.lookup(an.get(i)))an.remove(i)}catch{an.remove(i)}}});return{out:await n.save(),issues}}
- return{out:await d.save(),issues}}
-$('#dl').onclick=async()=>{if(!S.doc)return;busy(true);let res;try{res=await build($('#flat').checked)}catch(e){busy(false);console.error(e);toast('Could not build the PDF: '+(e?.message||e),true);return}busy(false);
+    else throw 0;
+    try{pf.defaultUpdateAppearances(font)}catch(e){throw e}}
+   catch(e){/* this field's internals are broken: hide its widget value and write on the page instead */
+    try{if(pf instanceof L.PDFTextField)pf.setText(undefined)}catch{}
+    drawn.add(f.name);if(!v)continue;
+    if(f.type==='checkbox'||f.type==='radio')drawMark(pages,f,v);else drawField(pages,font,f,safe(f.type==='select'?(f.options.find(o=>o.v===v)?.t||v):v))}}
+  if(form&&flatten){/* fields whose appearance data is damaged can't be flattened: take them out of the form and write their value on the page */
+   for(const pf of form.getFields()){let broken=false;try{for(const w of pf.acroField.getWidgets()){const ap=w.getAppearances();if(!ap||!ap.normal)broken=true}}catch{broken=true}
+    if(!broken)continue;const f=S.fmap.get(pf.getName());
+    try{form.removeField(pf)}catch{for(const pg of pages)stripWidgets(d,pg,false)}
+    if(f&&!drawn.has(f.name)){drawn.add(f.name);const v=S.values[f.name];if(v){if(f.type==='checkbox'||f.type==='radio')drawMark(pages,f,v);else drawField(pages,font,f,safe(f.type==='select'?(f.options.find(o=>o.v===v)?.t||v):v))}}}
+   form.flatten({updateFieldAppearances:false})}}
+ await drawOverlays(d,pages,font,safe);
+ if(flatten){const n=await L.PDFDocument.create();const cp=await n.copyPages(d,d.getPageIndices());cp.forEach(pg=>{n.addPage(pg);stripWidgets(n,pg,false)});return{out:await n.save({updateFieldAppearances:false}),issues,drawn:drawn.size}}
+ return{out:await d.save({updateFieldAppearances:false}),issues,drawn:drawn.size}}
+/* Fallback export: copies the pages into a clean document and writes every answer onto the page. Not fillable afterwards. */
+async function buildSafe(){
+ const L=window.PDFLib;const src=await L.PDFDocument.load(S.doc.bytes,{ignoreEncryption:true,throwOnInvalidObject:false});
+ const d=await L.PDFDocument.create();const cp=await d.copyPages(src,src.getPageIndices());cp.forEach(pg=>{d.addPage(pg);stripWidgets(d,pg,true)});
+ const font=await d.embedFont(L.StandardFonts.Helvetica);const safe=mkSafe(font);const pages=d.getPages();
+ for(const f of S.fields){const v=S.values[f.name];if(!v)continue;
+  try{if(f.type==='checkbox'||f.type==='radio')drawMark(pages,f,v);else drawField(pages,font,f,safe(f.type==='select'?(f.options.find(o=>o.v===v)?.t||v):v))}catch(e){console.warn('field',f.name,e)}}
+ await drawOverlays(d,pages,font,safe);return{out:await d.save({updateFieldAppearances:false}),issues:[],safe:true}}
+$('#dl').onclick=async()=>{if(!S.doc)return;busy(true);let res;
+ try{res=await build($('#flat').checked)}catch(e){console.warn('Normal export failed, using fallback:',e);
+  try{res=await buildSafe()}catch(e2){busy(false);console.error(e2);toast('Could not build the PDF: '+(e2?.message||e2),true);return}}
+ busy(false);
  const name=S.doc.name.replace(/\.pdf$/i,'')+'-filled.pdf';const blob=new Blob([res.out],{type:'application/pdf'});
  if(DL){try{await DL.save({filename:name,data:blob});S.dirty=false;toast('Saved '+name)}catch(e){toast(e?.code==='declined'?'Download cancelled.':e?.code==='rate_limited'?'A save prompt is already open.':'Download failed: '+(e?.message||e?.code||e),true);return}}
  else{const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),5000);S.dirty=false;toast('Downloaded '+name)}
- if(res.issues.length)setTimeout(()=>toast('Could not set: '+res.issues.slice(0,4).join(', ')+(res.issues.length>4?'…':''),true),1200)};
+ const note=res.safe?'This PDF’s form internals are damaged, so your answers were written onto the page. The download looks right but its fields can’t be edited again.':res.drawn?`${res.drawn} field${res.drawn>1?'s':''} couldn’t be filled as form fields, so ${res.drawn>1?'they were':'it was'} written onto the page instead.`:res.issues.length?'Could not set: '+res.issues.slice(0,4).join(', '):'';
+ if(note)setTimeout(()=>toast(note,res.safe),1400)};
 
 /* ---------- sample form ---------- */
 async function sample(){const L=window.PDFLib;if(!L){toast('The PDF libraries did not load.',true);return}
