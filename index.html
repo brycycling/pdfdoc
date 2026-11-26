@@ -227,7 +227,7 @@ details summary{cursor:pointer;font-size:13px;color:var(--mute);margin-top:16px}
         </g>
       </svg>
       <h1>Fill any PDF, right in your browser</h1>
-      <p>Type straight into fillable forms, write on flat or scanned ones, reuse your details with profiles, and let Claude pull answers from pasted notes. Your files stay on this device.</p>
+      <p>Type straight into fillable forms, write on flat or scanned ones, and reuse your details and signature with profiles. Your files stay on this device.</p>
       <div class="drop" id="drop">
         <button class="btn go" id="openbtn"></button>
         <button class="btn" id="samplebtn">Try a sample form</button>
@@ -241,7 +241,7 @@ details summary{cursor:pointer;font-size:13px;color:var(--mute);margin-top:16px}
     <div class="tabs" role="tablist">
       <button class="tab on" data-tab="fields" role="tab">Fields</button>
       <button class="tab" data-tab="profile" role="tab">Profile</button>
-      <button class="tab" data-tab="smart" role="tab">Smart fill</button>
+      <button class="tab" data-tab="smart" role="tab">Paste</button>
       <button class="tab" data-tab="library" role="tab">Library</button>
     </div>
     <section class="pane on" id="p-fields">
@@ -266,24 +266,17 @@ details summary{cursor:pointer;font-size:13px;color:var(--mute);margin-top:16px}
       <div id="prrev"></div>
     </section>
     <section class="pane" id="p-smart">
-      <h2>Smart fill</h2>
-      <p class="lead">Paste a referral, an email or clinic notes. Claude reads them and suggests a value for each field; you review before anything is filled in.</p>
-      <textarea class="inp" id="smtext" placeholder="Paste text here…" aria-label="Text to fill from"></textarea>
+      <h2>Paste values</h2>
+      <p class="lead">Paste lines written as <b>Label: value</b>, one per line. Each label is matched to the closest field on the form, and you review the matches before anything is filled in. Nothing leaves your browser.</p>
+      <textarea class="inp" id="smtext" placeholder="Patient name: Jane Doe&#10;Date of birth: 1950-02-03&#10;Reason for referral: …" aria-label="Lines to match"></textarea>
       <div class="row" style="margin-top:10px">
-        <button class="btn go" id="aibtn" disabled></button>
-        <button class="btn" id="kvbtn" disabled>Match “Label: value” lines</button>
+        <button class="btn go" id="kvbtn" disabled>Match to fields</button>
       </div>
-      <p class="lead" id="aistate" style="margin-top:10px"></p>
       <div id="smrev"></div>
-      <details id="tpldet"><summary>Blank “Label: value” template for this form</summary>
-        <p class="lead" style="margin-top:8px">Fill it in anywhere (or have another app produce it), paste it back above, then choose Match.</p>
+      <details id="tpldet"><summary>Blank template for this form</summary>
+        <p class="lead" style="margin-top:8px">Copy it, fill in the values anywhere, then paste it back above.</p>
         <textarea class="inp" id="tpl" readonly aria-label="Template"></textarea>
         <button class="btn sm" id="tplcopy" style="margin-top:8px">Copy template</button>
-      </details>
-      <details id="keydet"><summary>Use Smart fill outside Claude</summary>
-        <p class="lead" style="margin-top:8px">When this page runs on its own (opened as a file or on your site), Smart fill needs your Anthropic API key. It is kept only in this browser and sent only to api.anthropic.com.</p>
-        <input class="inp" id="apikey" type="password" placeholder="sk-ant-…" autocomplete="off" aria-label="Anthropic API key">
-        <div class="row" style="margin-top:8px"><button class="btn sm" id="keysave">Save key</button><button class="btn sm" id="keyclear">Forget key</button></div>
       </details>
     </section>
     <section class="pane" id="p-library">
@@ -309,16 +302,16 @@ const uid=()=>Math.random().toString(36).slice(2,10);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const store={get(k,d){try{const v=localStorage.getItem('fd.'+k);return v==null?d:JSON.parse(v)}catch{return d}},set(k,v){try{localStorage.setItem('fd.'+k,JSON.stringify(v))}catch{}}};
 
-const P={cursor:'<path d="M5 3l14 8-6 2-3 6z"/>',type:'<path d="M5 7V5h14v2M9 19h6M12 5v14"/>',cal:'<rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',check:'<path d="M5 12.5l4.5 4.5L19 7"/>',x:'<path d="M6 6l12 12M18 6L6 18"/>',sign:'<path d="M3 17c2.5-5 4.5-9 6-9 2 0-1 8 1 8s3-5 5-5-0 4 2 4 2-2 4-2"/><path d="M3 21h18"/>',dl:'<path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/>',plus:'<path d="M12 5v14M5 12h14"/>',minus:'<path d="M5 12h14"/>',undo:'<path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 010 11H11"/>',redo:'<path d="M15 14l5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 000 11H13"/>',trash:'<path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/>',file:'<path d="M14 3H6.5v18h11V6.5z"/><path d="M14 3v3.5h3.5"/>',open:'<path d="M3 7V5.5A1.5 1.5 0 014.5 4H9l2 2.5h8.5A1.5 1.5 0 0121 8v1"/><path d="M3 9h18l-2 10H5z"/>',pen:'<path d="M4 20h4L19 9l-4-4L4 16z"/>',spark:'<path d="M12 3l1.8 5.6L19.5 10l-5.7 1.6L12 17l-1.8-5.4L4.5 10l5.7-1.4z"/><path d="M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/>',list:'<path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/>',circ:'<circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="3" fill="currentColor"/>',box:'<rect x="4.5" y="4.5" width="15" height="15" rx="2.5"/><path d="M8.5 12.2l2.4 2.4 4.6-5"/>',sel:'<rect x="3.5" y="6" width="17" height="12" rx="2"/><path d="M14.5 11l2 2 2-2"/>'};
+const P={cursor:'<path d="M5 3l14 8-6 2-3 6z"/>',type:'<path d="M5 7V5h14v2M9 19h6M12 5v14"/>',cal:'<rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',check:'<path d="M5 12.5l4.5 4.5L19 7"/>',x:'<path d="M6 6l12 12M18 6L6 18"/>',sign:'<path d="M3 17c2.5-5 4.5-9 6-9 2 0-1 8 1 8s3-5 5-5-0 4 2 4 2-2 4-2"/><path d="M3 21h18"/>',dl:'<path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/>',plus:'<path d="M12 5v14M5 12h14"/>',minus:'<path d="M5 12h14"/>',undo:'<path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 010 11H11"/>',redo:'<path d="M15 14l5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 000 11H13"/>',trash:'<path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/>',file:'<path d="M14 3H6.5v18h11V6.5z"/><path d="M14 3v3.5h3.5"/>',open:'<path d="M3 7V5.5A1.5 1.5 0 014.5 4H9l2 2.5h8.5A1.5 1.5 0 0121 8v1"/><path d="M3 9h18l-2 10H5z"/>',pen:'<path d="M4 20h4L19 9l-4-4L4 16z"/>',list:'<path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/>',circ:'<circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="3" fill="currentColor"/>',box:'<rect x="4.5" y="4.5" width="15" height="15" rx="2.5"/><path d="M8.5 12.2l2.4 2.4 4.6-5"/>',sel:'<rect x="3.5" y="6" width="17" height="12" rx="2"/><path d="M14.5 11l2 2 2-2"/>'};
 const ic=(n,s=18)=>`<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[n]}</svg>`;
 
 const TOOLS=[['fill','cursor','Fill'],['text','type','Text'],['date','cal','Date'],['check','check','Check'],['cross','x','Cross'],['sig','sign','Sign']];
 $('#tools').innerHTML=TOOLS.map(([k,i,l])=>`<button class="tb${k==='fill'?' on':''}" data-tool="${k}" title="${l}" aria-label="${l}">${ic(i)}<span>${l}</span></button>`).join('');
 $('#zout').innerHTML=ic('minus');$('#zin').innerHTML=ic('plus');$('#undo').innerHTML=ic('undo');$('#redo').innerHTML=ic('redo');
-$('#dl').innerHTML=ic('dl')+'Download';$('#openbtn').innerHTML=ic('open')+'Open a PDF';$('#aibtn').innerHTML=ic('spark')+'Fill with Claude';
+$('#dl').innerHTML=ic('dl')+'Download';$('#openbtn').innerHTML=ic('open')+'Open a PDF';
 
 const S={doc:null,pdf:null,pages:[],fields:[],fmap:new Map(),values:{},init:{},labels:{},overlays:[],tool:'fill',sel:null,scale:1,fit:true,ink:'#1a1a1a',fsize:10,hist:[],future:[],lastCk:0,dirty:false};
-let DL=null,AI=null;
+let DL=null;
 const WORKER='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
 const PJ=window.pdfjsLib;
 if(PJ){PJ.GlobalWorkerOptions.workerSrc=WORKER;try{PJ.GlobalWorkerOptions.workerPort=new Worker(URL.createObjectURL(new Blob([`importScripts("${WORKER}")`],{type:'text/javascript'})))}catch(e){}}
@@ -403,7 +396,7 @@ async function openBytes(bytes,name,saved){
   if(saved?.values)for(const k in saved.values)if(S.fmap.has(k))S.values[k]=saved.values[k];
   let xfa=false;try{const md=await pdf.getMetadata();xfa=!!md?.info?.IsXFAPresent}catch{}
   $('#empty').style.display='none';$('#docname').textContent=name;$('#fdoc').textContent=name+' · ';$('#dl').disabled=false;
-  S.fit=true;layout();renderFields();renderTemplate();renderLibSave();updUndo();setReady();
+  S.fit=true;layout();renderFields();renderTemplate();renderLibSave();updUndo();
   if(xfa&&!S.fields.length)toast('This is an XFA (LiveCycle) form. Browsers cannot fill these directly; use Text and Check to write on it instead.',true);
   else toast(S.fields.length?`${S.fields.length} fillable field${S.fields.length>1?'s':''} found`:'No fillable fields. Use Text, Date, Check and Sign to write on it.');
  }catch(e){console.error(e);toast(/password/i.test(e?.message||'')?'This PDF is password protected.':'Could not open that PDF: '+(e?.message||e),true)}
@@ -525,7 +518,7 @@ function renderFields(){const q=$('#fq').value.trim().toLowerCase();const T=targ
   html+=`<div class="fr${v?' done':''}" data-t="${esc(t.id)}" tabindex="0" role="button"><span class="ic">${ic(t.o?'pen':TIC[t.type],16)}</span><span class="lb">${esc(t.label)}</span><span class="vl">${esc(v)}</span><button class="ren" title="Rename" aria-label="Rename ${esc(t.label)}">${ic('pen',14)}</button></div>`}
  $('#flist').innerHTML=html||'<p class="lead">No fields match.</p>';updCount()}
 function updRow(id){const row=$(`.fr[data-t="${CSS.escape(id)}"]`);if(!row)return;const t=targets().find(x=>x.id===id);if(!t)return;const v=disp(t);row.querySelector('.vl').textContent=v;row.classList.toggle('done',!!v)}
-function updCount(){if(!S.pdf)return;const T=targets();const n=T.filter(t=>disp(t)).length;$('#fcount').textContent=T.length?`${n} of ${T.length} filled`:'Flat PDF: write on it with the toolbar.';$('#prapply').disabled=!T.length;$('#kvbtn').disabled=!T.length;setReady()}
+function updCount(){if(!S.pdf)return;const T=targets();const n=T.filter(t=>disp(t)).length;$('#fcount').textContent=T.length?`${n} of ${T.length} filled`:'Flat PDF: write on it with the toolbar.';$('#prapply').disabled=!T.length;$('#kvbtn').disabled=!T.length}
 function hiRow(name,on){$$('.fr.hl').forEach(r=>r.classList.remove('hl'));if(on){const r=$(`.fr[data-t="${CSS.escape(name)}"]`);if(r){r.classList.add('hl');r.scrollIntoView({block:'nearest'})}}}
 function focusTarget(id){const el=id.startsWith('ov:')?$(`.ov[data-id="${CSS.escape(id.slice(3))}"] textarea`):$(`.w[data-f="${CSS.escape(id)}"]`);if(!el)return;el.scrollIntoView({block:'center',behavior:'smooth'});setTimeout(()=>el.focus({preventScroll:true}),250);if(innerWidth<900)$('#side').classList.remove('open')}
 $('#flist').addEventListener('click',e=>{const row=e.target.closest('.fr');if(!row)return;const id=row.dataset.t;
@@ -538,7 +531,7 @@ $('#flist').addEventListener('mouseover',e=>{const row=e.target.closest('.fr');$
 $('#flist').addEventListener('mouseleave',()=>$$('.w.hl').forEach(x=>x.classList.remove('hl')));
 $('#fq').oninput=renderFields;
 
-/* ---------- apply values (profile, smart fill) ---------- */
+/* ---------- apply values (profile, paste) ---------- */
 function coerce(t,raw){const s=String(raw??'').trim();if(t.o)return s;const f=t.f;
  if(f.type==='checkbox')return/^(y|yes|true|1|x|checked|on|✓|✔)$/i.test(s)?f.widgets[0].on:'';
  if(f.type==='radio'||f.type==='select'){const opts=f.type==='radio'?f.widgets.map(w=>({v:w.on,t:w.t||w.on})):f.options;const L=s.toLowerCase();
@@ -590,30 +583,13 @@ $('#sigdel').onclick=()=>{curProfile().sig=null;savePR();renderProfile()};
 $('#sigup').onchange=e=>{const f=e.target.files[0];if(!f)return;const im=new Image();im.onload=()=>{const cv=document.createElement('canvas');const sc=Math.min(1,900/im.width);cv.width=im.width*sc;cv.height=im.height*sc;const x=cv.getContext('2d');x.drawImage(im,0,0,cv.width,cv.height);
  const d=x.getImageData(0,0,cv.width,cv.height);for(let i=0;i<d.data.length;i+=4){const l=(d.data[i]+d.data[i+1]+d.data[i+2])/3;if(l>200)d.data[i+3]=0}x.putImageData(d,0,0);const s=trim(cv);if(s){curProfile().sig=s;savePR();renderProfile();toast('Signature saved. White background removed.')}URL.revokeObjectURL(im.src)};im.src=URL.createObjectURL(f);e.target.value=''};
 
-/* ---------- smart fill ---------- */
-function setReady(){const has=!!S.pdf&&targets().length>0;const key=store.get('apikey','');$('#aibtn').disabled=!has||!(AI||key);
- $('#aistate').textContent=!AI&&!key?'Smart fill with Claude is available when this page is opened in Claude, or with your own API key below. You can still match “Label: value” lines.':AI?'Your pasted text and the field labels are sent to Claude.':'Your pasted text and the field labels are sent to Anthropic with your API key.';
- $('#keydet').style.display=AI?'none':''}
-async function callClaude(prompt){
- if(AI){const r=await AI(prompt,{modelTier:'default'});return r.text}
- const key=store.get('apikey','');const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-5-5',max_tokens:4096,messages:[{role:'user',content:prompt}]})});
- const j=await res.json();if(!res.ok)throw new Error(j?.error?.message||res.status);return j.content.map(c=>c.text||'').join('')}
-$('#aibtn').onclick=async()=>{const text=$('#smtext').value.trim();if(!text){toast('Paste some text first.');return}const T=targets();
- const list=T.map((t,i)=>{const o={id:'f'+(i+1),label:t.label,type:t.type==='select'?'choice':t.type,page:t.page};if(t.f?.type==='radio')o.options=t.f.widgets.map(w=>w.t||w.on);if(t.f?.type==='select')o.options=t.f.options.map(x=>x.t);if(t.f?.maxLen)o.maxLength=t.f.maxLen;if(t.f?.multi)o.multiline=true;return o});
- const prompt=`You are filling in a PDF form from the user's text.\n\nForm fields (JSON):\n${JSON.stringify(list)}\n\nText:\n"""\n${text}\n"""\n\nToday is ${new Date().toDateString()}. Reply with ONLY a JSON object that maps field id to the value to enter.\nRules:\n- Include only fields the text clearly answers. Never guess or invent anything.\n- checkbox: "yes" or "no". radio and choice: one of the listed options, copied exactly.\n- Respect maxLength. Use line breaks only for multiline fields.\n- Dates: use the format the form's label implies, otherwise YYYY-MM-DD.\n- No commentary, no code fences.`;
- const b=$('#aibtn');b.disabled=true;b.innerHTML=ic('spark')+'Reading…';
- try{const out=await callClaude(prompt);const m=out.match(/\{[\s\S]*\}/);if(!m)throw new Error('Claude did not return any values.');const obj=JSON.parse(m[0]);
-  const props=Object.entries(obj).map(([id,v])=>{const t=T[+String(id).slice(1)-1];return t&&v!=null&&String(v).trim()!==''?{t,value:String(v)}:null}).filter(Boolean);review($('#smrev'),props,'Suggested by Claude')}
- catch(e){const c=e?.code;toast(c==='not_granted'?'Smart fill was not allowed for this page.':c==='rate_limited'?'Claude is busy. Try again in a moment.':'Smart fill failed: '+(e?.message||e),true)}
- finally{b.innerHTML=ic('spark')+'Fill with Claude';setReady()}};
+/* ---------- paste values ---------- */
 $('#kvbtn').onclick=()=>{const T=targets();const props=[];const seen=new Set();
  for(const line of $('#smtext').value.split('\n')){const i=line.indexOf(':');if(i<1)continue;const k=line.slice(0,i).trim(),v=line.slice(i+1).trim();if(!v)continue;
   let best=null,bs=0;for(const t of T){const s=score(k,t.label);if(s>bs){bs=s;best=t}}if(best&&bs>=.6&&!seen.has(best.id)){seen.add(best.id);props.push({t:best,value:v,from:k})}}
  review($('#smrev'),props,'Matched lines')};
 function renderTemplate(){$('#tpl').value=targets().map(t=>`${t.label}: `).join('\n')}
 $('#tplcopy').onclick=async()=>{try{await navigator.clipboard.writeText($('#tpl').value);toast('Template copied.')}catch{$('#tpl').select();toast('Press Ctrl+C (⌘C) to copy.')}};
-$('#keysave').onclick=()=>{const v=$('#apikey').value.trim();if(!v)return;store.set('apikey',v);$('#apikey').value='';toast('Key saved in this browser.');setReady()};
-$('#keyclear').onclick=()=>{store.set('apikey','');toast('Key removed.');setReady()};
 
 /* ---------- library (IndexedDB) ---------- */
 const DB={p:null,open(){return this.p||(this.p=new Promise((res,rej)=>{try{const r=indexedDB.open('formdesk',1);r.onupgradeneeded=()=>r.result.createObjectStore('forms',{keyPath:'id'});r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}catch(e){rej(e)}}))},
@@ -704,8 +680,8 @@ addEventListener('keydown',e=>{const typing=/INPUT|TEXTAREA|SELECT/.test(documen
  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='y'&&!typing){e.preventDefault();redo()}
  if((e.key==='Delete'||e.key==='Backspace')&&S.sel&&!typing){e.preventDefault();delOv(S.sel)}});
 addEventListener('beforeunload',e=>{if(S.dirty){e.preventDefault();e.returnValue=''}});
-renderProfile();renderLib();renderLibSave();setReady();
-if(window.claude?.use){claude.use('downloads').then(d=>{DL=d}).catch(()=>{});claude.use('sample').then(s=>{AI=s;setReady()}).catch(()=>{})}
+renderProfile();renderLib();renderLibSave();
+if(window.claude?.use){claude.use('downloads').then(d=>{DL=d}).catch(()=>{})}
 if(!PJ||!window.PDFLib)toast('The PDF libraries did not load. Check your connection and reload.',true);
 }
 </script>
