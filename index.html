@@ -1,0 +1,713 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Form Desk</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter+Tight:wght@600;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+<style>
+/* VOICE: calm, clinical, exact. A tool that opens mid-use.
+   IDEA: a clinician's form desk: the paper is the hero, the green band is the clipboard.
+   PICTURE: the PDF itself, with fields lit up in lime where you can write.
+   COLOUR and TYPE: deep green band, white desk, lime-white field highlights, coral only for selection/trouble; Inter Tight + Inter.
+   LAYOUT: band on top with tools, document centre, panel right (bottom sheet under 900px). */
+:root{color-scheme:light dark;
+--g:#00463c;--g2:#0a5a4d;--lime:#e6f5c8;--coral:#ff6f59;
+--bg:light-dark(#e9eeea,#0c1714);--panel:light-dark(#ffffff,#13221e);--ink:light-dark(#11201c,#e4ece7);
+--mute:light-dark(#5b6b66,#93a69f);--line:light-dark(#d7dfdb,#24352f);--soft:light-dark(#f2f6f3,#182a25);
+--field:rgba(196,232,140,.42)}
+:root[data-theme=light]{color-scheme:light}:root[data-theme=dark]{color-scheme:dark}
+*{box-sizing:border-box;min-width:0}
+html,body{height:100%}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 Inter,system-ui,sans-serif;overflow:hidden;display:grid;grid-template-rows:auto 1fr}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--coral);outline-offset:2px}
+h1,h2,h3{font-family:"Inter Tight",Inter,sans-serif;margin:0;line-height:1.1}
+.top{background:var(--g);color:#fff;display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px;padding:10px max(2vw,12px)}
+.brand{display:flex;align-items:center;gap:9px;font:700 18px "Inter Tight",sans-serif;white-space:nowrap}
+.docname{font-size:13px;color:#cfe3d9;max-width:24ch;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tools{display:flex;gap:2px;background:rgba(255,255,255,.08);border-radius:10px;padding:3px;margin-inline:auto}
+.tb{display:flex;align-items:center;gap:6px;height:38px;padding:0 11px;border:0;border-radius:8px;background:transparent;color:#e7f1ec;font-size:13.5px;font-weight:500;white-space:nowrap}
+.tb:hover{background:rgba(255,255,255,.1)}
+.tb.on{background:var(--lime);color:var(--g)}
+.tb:disabled{opacity:.4;cursor:default}
+.grp{display:flex;align-items:center;gap:2px}
+.zl{min-width:48px;text-align:center;font-size:13px;color:#cfe3d9;font-variant-numeric:tabular-nums}
+.ink{width:22px;height:22px;border-radius:50%;border:2px solid transparent;padding:0}
+.ink.on{border-color:var(--lime)}
+.primary{display:flex;align-items:center;gap:7px;height:40px;padding:0 16px;border:0;border-radius:9px;background:var(--lime);color:var(--g);font-weight:600;white-space:nowrap}
+.primary:disabled{opacity:.5;cursor:default}
+.flat{display:flex;align-items:center;gap:6px;font-size:13px;color:#cfe3d9;white-space:nowrap}
+.flat input{accent-color:var(--lime);width:16px;height:16px}
+main{display:grid;grid-template-columns:minmax(0,1fr) 370px;min-height:0}
+#desk{overflow:auto;position:relative;padding:28px 24px 60px}
+#pages{width:max-content;min-width:100%}
+.page{position:relative;margin:0 auto 34px;background:#fff;box-shadow:0 1px 2px rgba(0,30,20,.12),0 10px 30px -8px rgba(0,30,20,.25)}
+.page canvas{position:absolute;inset:0;display:block}
+.wl,.ol{position:absolute;inset:0}.ol{pointer-events:none}.ov{pointer-events:auto}
+.pno{position:absolute;right:0;bottom:-24px;font-size:12px;color:var(--mute)}
+body.placing .wl{pointer-events:none}
+body.placing .page{cursor:crosshair}
+.w{position:absolute;margin:0;border:0;border-bottom:1.5px solid rgba(0,70,60,.5);background:var(--field);color:#0b1f1a;font-family:Helvetica,Arial,sans-serif;padding:0 3px;border-radius:2px;outline:none;resize:none;line-height:1.15;color-scheme:light}
+.w:hover,.w.hl{background:rgba(196,232,140,.75)}
+.w.filled{background:rgba(196,232,140,.16)}
+.w:focus{background:#fff;box-shadow:0 0 0 2px var(--g);border-color:transparent;z-index:3}
+textarea.w{padding:2px 3px;line-height:1.2}
+select.w{padding:0 2px}
+.w-checkbox,.w-radio{appearance:none;display:grid;place-content:center;border:1.5px solid rgba(0,70,60,.55);cursor:pointer}
+.w-radio{border-radius:50%}
+.w-checkbox:checked{background:#fff url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath d='M5 12.5l4.5 4.5L19 7' fill='none' stroke='%230b1f1a' stroke-width='3.2' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E") center/85% no-repeat}
+.w-radio:checked{background:radial-gradient(circle,#0b1f1a 0 32%,#fff 36%)}
+.ov{position:absolute;outline:1px dashed transparent;outline-offset:1px;touch-action:none}
+.ov:hover{outline-color:rgba(255,111,89,.7)}
+.ov.sel{outline:1.5px solid var(--coral)}
+.ov:not(.ov-text){cursor:move}
+.ov textarea{display:block;width:100%;height:100%;border:0;margin:0;background:rgba(255,111,89,.06);resize:none;padding:0 1px;font-family:Helvetica,Arial,sans-serif;line-height:1.2;color:inherit;overflow:hidden;white-space:pre;outline:none;color-scheme:light}
+.ov svg,.ov img{display:block;width:100%;height:100%;pointer-events:none;user-select:none}
+.grip,.rs{position:absolute;width:14px;height:14px;background:var(--coral);border:2px solid #fff;border-radius:50%;opacity:0;transition:opacity .12s;box-shadow:0 1px 3px rgba(0,0,0,.3)}
+.grip{left:-9px;top:-9px;cursor:move}
+.rs{right:-8px;bottom:-8px;border-radius:3px;cursor:nwse-resize}
+.ov:hover .grip,.ov:hover .rs,.ov.sel .grip,.ov.sel .rs{opacity:1}
+#ovbar{position:absolute;bottom:calc(100% + 10px);left:-2px;display:flex;align-items:center;gap:2px;background:#0b1f1a;color:#fff;border-radius:9px;padding:4px;z-index:6;box-shadow:0 6px 18px rgba(0,0,0,.25);white-space:nowrap}
+#ovbar button{width:34px;height:34px;border:0;border-radius:7px;background:transparent;color:#fff;display:grid;place-content:center}
+#ovbar button:hover{background:rgba(255,255,255,.12)}
+#ovbar .sz{font-size:12px;min-width:30px;text-align:center;font-variant-numeric:tabular-nums}
+#ovbar input{width:150px;height:30px;border:0;border-radius:6px;background:rgba(255,255,255,.12);padding:0 8px;font-size:13px;color:#fff}
+#ovbar input::placeholder{color:#9fb5ad}
+aside{background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+.tabs{display:flex;border-bottom:1px solid var(--line);padding:0 8px}
+.tab{flex:1;height:48px;border:0;background:none;font-size:13.5px;font-weight:500;color:var(--mute);border-bottom:2px solid transparent;margin-bottom:-1px}
+.tab.on{color:var(--ink);border-color:var(--g)}
+:root[data-theme=dark] .tab.on{border-color:var(--lime)}
+@media (prefers-color-scheme:dark){:root:not([data-theme=light]) .tab.on{border-color:var(--lime)}}
+.pane{flex:1;overflow:auto;padding:18px;display:none}
+.pane.on{display:block}
+.pane h2{font-size:20px;margin-bottom:4px}
+.lead{color:var(--mute);font-size:13.5px;margin:0 0 14px}
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:40px;padding:0 14px;border-radius:9px;border:1px solid var(--line);background:var(--panel);font-size:14px;font-weight:500}
+.btn:hover{background:var(--soft)}
+.btn.go{background:var(--g);color:#fff;border-color:var(--g)}
+.btn.go:hover{background:var(--g2)}
+.btn.sm{min-height:34px;padding:0 10px;font-size:13px}
+.btn:disabled{opacity:.5;cursor:default}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.inp{width:100%;min-height:40px;border:1px solid var(--line);border-radius:8px;background:var(--panel);padding:8px 10px;font-size:16px}
+textarea.inp{min-height:150px;resize:vertical;line-height:1.45;font-size:15px}
+label.f{display:block;font-size:12.5px;font-weight:500;color:var(--mute);margin:12px 0 5px}
+.search{margin-bottom:12px}
+.count{font-size:13px;color:var(--mute);margin:-6px 0 10px}
+.pg{font:600 12px Inter;color:var(--mute);margin:16px 0 6px}
+.fr{display:grid;grid-template-columns:22px minmax(0,1fr) auto;align-items:center;gap:8px;padding:7px 8px;border-radius:8px;cursor:pointer}
+.fr:hover,.fr.hl{background:var(--soft)}
+.fr .ic{color:var(--mute);display:grid}
+.fr .lb{font-size:13.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fr .vl{font-size:12.5px;color:var(--mute);max-width:110px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fr.done .ic{color:var(--g)}
+:root[data-theme=dark] .fr.done .ic{color:#b9e38a}
+.fr .ren{border:0;background:none;color:var(--mute);width:28px;height:28px;border-radius:6px;display:none;place-content:center}
+.fr:hover .ren{display:grid}
+.fr:hover .vl{display:none}
+.fr input{height:30px;font-size:14px;border:1px solid var(--g);border-radius:6px;padding:0 6px;background:var(--panel)}
+.note{background:var(--soft);border-radius:10px;padding:12px 14px;font-size:13.5px;color:var(--mute)}
+.kv{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr) 32px;gap:6px;margin-bottom:6px}
+.kv input{min-height:36px;font-size:14px;padding:6px 8px}
+.x{border:0;background:none;color:var(--mute);border-radius:6px;display:grid;place-content:center}
+.x:hover{background:var(--soft);color:var(--coral)}
+.sig{height:80px;border:1px dashed var(--line);border-radius:10px;display:grid;place-content:center;background:#fff;color:#7a8a85;font-size:13px;margin-bottom:8px}
+.sig img{max-height:70px;max-width:100%}
+.rv{margin-top:14px;border:1px solid var(--line);border-radius:12px;overflow:hidden}
+.rv h3{font-size:15px;padding:12px 14px;background:var(--soft)}
+.rvi{display:grid;grid-template-columns:22px minmax(0,1fr);gap:8px;padding:9px 14px;border-top:1px solid var(--line);align-items:start}
+.rvi input[type=checkbox]{width:18px;height:18px;margin-top:2px;accent-color:var(--g)}
+.rvi .lb{font-size:12.5px;color:var(--mute)}
+.rvi .from{font-size:11.5px;color:var(--mute)}
+.rvi input.inp{min-height:34px;font-size:14px;padding:5px 8px;margin-top:3px}
+.rv .row{padding:12px 14px;border-top:1px solid var(--line)}
+.lib{display:grid;gap:8px}
+.li{display:grid;grid-template-columns:36px minmax(0,1fr) auto;gap:10px;align-items:center;padding:10px;border:1px solid var(--line);border-radius:10px}
+.li .ic{width:36px;height:44px;border-radius:4px;background:var(--lime);color:var(--g);display:grid;place-content:center}
+.li b{font-weight:600;font-size:14px;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.li small{color:var(--mute);font-size:12px}
+.tag{display:inline-block;font-size:11px;padding:1px 7px;border-radius:99px;background:var(--soft);margin-left:4px}
+details summary{cursor:pointer;font-size:13px;color:var(--mute);margin-top:16px}
+.empty{max-width:760px;margin:0 auto;padding-top:min(4vh,40px)}
+.hero{display:block;width:100%;height:auto;max-height:46vh;margin-bottom:22px}
+.empty h1{font-size:clamp(30px,4vw,46px);text-wrap:balance;margin-bottom:12px;letter-spacing:-.01em}
+.empty p{font-size:16.5px;color:var(--mute);max-width:60ch;margin:0 0 22px}
+.drop{border:2px dashed var(--line);border-radius:16px;padding:20px;display:flex;flex-wrap:wrap;gap:12px;align-items:center;transition:.15s}
+.drop.over{border-color:var(--g);background:rgba(0,70,60,.06)}
+.drop .hint{font-size:13.5px;color:var(--mute);flex:1 1 200px}
+.recent{margin-top:28px}
+.recent h3{font-size:15px;margin-bottom:10px}
+#dropcover{position:fixed;inset:0;background:rgba(0,70,60,.82);color:#fff;display:none;place-content:center;z-index:50;font:700 28px "Inter Tight"}
+#dropcover.on{display:grid}
+.modal{position:fixed;inset:0;background:rgba(5,20,16,.55);display:none;place-items:center;z-index:60;padding:16px}
+.modal.on{display:grid}
+.card{background:var(--panel);border-radius:16px;padding:22px;width:min(640px,100%);box-shadow:0 20px 60px rgba(0,0,0,.3)}
+.card h2{font-size:22px;margin-bottom:6px}
+.card p{color:var(--mute);margin:0 0 14px}
+#sigc{width:100%;aspect-ratio:3/1;background:#fff;border:1px solid var(--line);border-radius:10px;touch-action:none;cursor:crosshair;display:block}
+.foot{display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;margin-top:16px}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(20px);background:#0b1f1a;color:#fff;padding:11px 16px;border-radius:10px;font-size:14px;opacity:0;pointer-events:none;transition:.2s;z-index:70;max-width:min(520px,90vw)}
+#toast.on{opacity:1;transform:translateX(-50%)}
+#toast.bad{background:#7a2318}
+.busy{position:fixed;inset:0;display:none;place-content:center;z-index:65;background:rgba(5,20,16,.25)}
+.busy.on{display:grid}
+.spin{width:38px;height:38px;border:3px solid #fff;border-top-color:transparent;border-radius:50%;animation:sp 0.8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+.sheet{display:none}
+@media (max-width:1500px){.docname{display:none}}
+@media (max-width:1250px){.tb span{display:none}.tb{padding:0 10px}}
+@media (max-width:900px){
+ main{grid-template-columns:minmax(0,1fr)}
+ aside{position:fixed;left:0;right:0;bottom:0;height:62vh;z-index:40;border-left:0;border-top:1px solid var(--line);border-radius:16px 16px 0 0;transform:translateY(100%);transition:transform .25s;box-shadow:0 -10px 40px rgba(0,0,0,.25)}
+ aside.open{transform:none}
+ .sheet{display:flex}
+ .tools{order:5;margin:0;width:100%;justify-content:space-between}
+ .flat{display:none}
+ #desk{padding:18px 10px 60px}
+}
+@media (max-width:600px){.docname{display:none}.zl{display:none}}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation-duration:2s!important}}
+</style>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <svg width="26" height="26" viewBox="0 0 26 26" aria-hidden="true"><rect x="4" y="2" width="18" height="22" rx="2.5" fill="#e6f5c8"/><rect x="7.5" y="7" width="11" height="2.6" rx="1" fill="#00463c" opacity=".35"/><rect x="7.5" y="12" width="11" height="2.6" rx="1" fill="#00463c" opacity=".35"/><path d="M8 18.4l2.4 2.3 4.6-5" stroke="#ff6f59" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>
+    Form Desk
+  </div>
+  <div class="docname" id="docname"></div>
+  <div class="tools" role="toolbar" aria-label="Tools" id="tools"></div>
+  <div class="grp" aria-label="Ink colour">
+    <button class="ink on" data-ink="#1a1a1a" style="background:#1a1a1a" title="Black ink" aria-label="Black ink"></button>
+    <button class="ink" data-ink="#1b3a8f" style="background:#1b3a8f" title="Blue ink" aria-label="Blue ink"></button>
+  </div>
+  <div class="grp">
+    <button class="tb" id="zout" title="Zoom out" aria-label="Zoom out"></button>
+    <span class="zl" id="zl">100%</span>
+    <button class="tb" id="zin" title="Zoom in" aria-label="Zoom in"></button>
+    <button class="tb" id="zfit" title="Fit width"><b style="font-weight:500">Fit</b></button>
+  </div>
+  <div class="grp">
+    <button class="tb" id="undo" title="Undo (Ctrl+Z)" aria-label="Undo" disabled></button>
+    <button class="tb" id="redo" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" disabled></button>
+  </div>
+  <label class="flat" title="Bake the answers into the page so they can no longer be edited"><input type="checkbox" id="flat"> Flatten</label>
+  <button class="tb sheet" id="sheetbtn">Panel</button>
+  <button class="primary" id="dl" disabled></button>
+</header>
+<main>
+  <div id="desk">
+    <div class="empty" id="empty">
+      <svg class="hero" viewBox="0 0 760 330" role="img" aria-label="A form with highlighted fields, a check mark and a signature">
+        <defs><linearGradient id="pg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#fff"/><stop offset="1" stop-color="#f3f6f4"/></linearGradient></defs>
+        <rect x="0" y="0" width="760" height="330" rx="18" fill="#00463c"/>
+        <g opacity=".14" fill="#e6f5c8"><circle cx="680" cy="40" r="110"/><circle cx="70" cy="320" r="90"/></g>
+        <g transform="translate(436 34) rotate(5)"><rect width="230" height="300" rx="6" fill="#cfe1d7"/></g>
+        <g transform="translate(250 22)">
+          <rect x="6" y="10" width="270" height="300" rx="6" fill="#002e27" opacity=".35"/>
+          <rect width="270" height="300" rx="6" fill="url(#pg)"/>
+          <rect x="24" y="26" width="120" height="12" rx="3" fill="#11201c"/>
+          <rect x="24" y="46" width="70" height="6" rx="3" fill="#b8c4bf"/>
+          <g fill="#c4e88c" opacity=".7"><rect x="24" y="76" width="140" height="22" rx="2"/><rect x="176" y="76" width="70" height="22" rx="2"/><rect x="24" y="122" width="222" height="22" rx="2"/><rect x="24" y="168" width="222" height="52" rx="2"/></g>
+          <g fill="#7f908a"><rect x="24" y="68" width="40" height="4" rx="2"/><rect x="176" y="68" width="28" height="4" rx="2"/><rect x="24" y="114" width="56" height="4" rx="2"/><rect x="24" y="160" width="64" height="4" rx="2"/></g>
+          <g stroke="#00463c" stroke-width="1.5"><path d="M24 98h140M176 98h70M24 144h222"/></g>
+          <g fill="#11201c"><rect x="30" y="83" width="84" height="7" rx="2"/><rect x="182" y="83" width="44" height="7" rx="2"/><rect x="30" y="129" width="130" height="7" rx="2"/><rect x="30" y="176" width="190" height="6" rx="2"/><rect x="30" y="190" width="150" height="6" rx="2"/></g>
+          <rect x="24" y="238" width="14" height="14" rx="2" fill="none" stroke="#00463c" stroke-width="1.5"/>
+          <path d="M27 245l3.5 3.5 6-8" stroke="#11201c" stroke-width="2.2" fill="none" stroke-linecap="round"/>
+          <rect x="44" y="242" width="60" height="6" rx="3" fill="#b8c4bf"/>
+          <path d="M140 270h106" stroke="#b8c4bf" stroke-width="1.5"/>
+          <path d="M146 266c8-16 14-18 16-8s-2 14 6 2 10-12 12-4 4 8 12-2 12-6 18 0" stroke="#1b3a8f" stroke-width="2.4" fill="none" stroke-linecap="round"/>
+          <rect x="138" y="232" width="112" height="44" rx="3" fill="none" stroke="#ff6f59" stroke-width="1.5" stroke-dasharray="4 3"/>
+        </g>
+      </svg>
+      <h1>Fill any PDF, right in your browser</h1>
+      <p>Type straight into fillable forms, write on flat or scanned ones, reuse your details with profiles, and let Claude pull answers from pasted notes. Your files stay on this device.</p>
+      <div class="drop" id="drop">
+        <button class="btn go" id="openbtn"></button>
+        <button class="btn" id="samplebtn">Try a sample form</button>
+        <span class="hint">or drop a PDF anywhere on this page</span>
+      </div>
+      <div class="recent" id="recent"></div>
+    </div>
+    <div id="pages"></div>
+  </div>
+  <aside id="side">
+    <div class="tabs" role="tablist">
+      <button class="tab on" data-tab="fields" role="tab">Fields</button>
+      <button class="tab" data-tab="profile" role="tab">Profile</button>
+      <button class="tab" data-tab="smart" role="tab">Smart fill</button>
+      <button class="tab" data-tab="library" role="tab">Library</button>
+    </div>
+    <section class="pane on" id="p-fields">
+      <h2>Fields</h2>
+      <p class="lead"><span id="fdoc"></span><span id="fcount">Open a PDF to see its fields.</span></p>
+      <input class="inp search" id="fq" type="search" placeholder="Find a field" aria-label="Find a field">
+      <div id="flist"></div>
+    </section>
+    <section class="pane" id="p-profile">
+      <h2>Profile</h2>
+      <p class="lead">Details you write on forms again and again. Apply them and Form Desk matches each one to the right field by its label.</p>
+      <div class="row"><select class="inp" id="prsel" style="flex:1" aria-label="Profile"></select><button class="btn sm" id="prnew">New</button><button class="btn sm" id="prren">Rename</button><button class="btn sm" id="prdel">Delete</button></div>
+      <label class="f">Details <span style="font-weight:400">(type {today} for the current date)</span></label>
+      <div id="kvs"></div>
+      <button class="btn sm" id="kvadd">Add a detail</button>
+      <label class="f">Signature</label>
+      <div class="sig" id="sigprev">No signature yet</div>
+      <div class="row"><button class="btn sm" id="sigdraw">Draw</button><label class="btn sm">Upload image<input type="file" id="sigup" accept="image/png,image/jpeg" hidden></label><button class="btn sm" id="sigdel">Remove</button></div>
+      <label class="f" for="datefmt">Date format</label>
+      <select class="inp" id="datefmt"><option>YYYY-MM-DD</option><option>DD/MM/YYYY</option><option>MM/DD/YYYY</option><option>MMM D, YYYY</option><option>D MMMM YYYY</option></select>
+      <div style="margin-top:18px"><button class="btn go" id="prapply" disabled>Apply profile to this form</button></div>
+      <div id="prrev"></div>
+    </section>
+    <section class="pane" id="p-smart">
+      <h2>Smart fill</h2>
+      <p class="lead">Paste a referral, an email or clinic notes. Claude reads them and suggests a value for each field; you review before anything is filled in.</p>
+      <textarea class="inp" id="smtext" placeholder="Paste text here…" aria-label="Text to fill from"></textarea>
+      <div class="row" style="margin-top:10px">
+        <button class="btn go" id="aibtn" disabled></button>
+        <button class="btn" id="kvbtn" disabled>Match “Label: value” lines</button>
+      </div>
+      <p class="lead" id="aistate" style="margin-top:10px"></p>
+      <div id="smrev"></div>
+      <details id="tpldet"><summary>Blank “Label: value” template for this form</summary>
+        <p class="lead" style="margin-top:8px">Fill it in anywhere (or have another app produce it), paste it back above, then choose Match.</p>
+        <textarea class="inp" id="tpl" readonly aria-label="Template"></textarea>
+        <button class="btn sm" id="tplcopy" style="margin-top:8px">Copy template</button>
+      </details>
+      <details id="keydet"><summary>Use Smart fill outside Claude</summary>
+        <p class="lead" style="margin-top:8px">When this page runs on its own (opened as a file or on your site), Smart fill needs your Anthropic API key. It is kept only in this browser and sent only to api.anthropic.com.</p>
+        <input class="inp" id="apikey" type="password" placeholder="sk-ant-…" autocomplete="off" aria-label="Anthropic API key">
+        <div class="row" style="margin-top:8px"><button class="btn sm" id="keysave">Save key</button><button class="btn sm" id="keyclear">Forget key</button></div>
+      </details>
+    </section>
+    <section class="pane" id="p-library">
+      <h2>Library</h2>
+      <p class="lead">Keep forms you use often in this browser, either with your entries or as a blank template with your text boxes and labels in place.</p>
+      <div id="libsave"></div>
+      <h3 style="font-size:15px;margin:20px 0 10px">Saved forms</h3>
+      <div class="lib" id="liblist"></div>
+    </section>
+  </aside>
+</main>
+<input type="file" id="file" accept="application/pdf,.pdf" hidden>
+<div id="dropcover">Drop the PDF to open it</div>
+<div class="modal" id="modal"><div class="card" id="mcard" role="dialog" aria-modal="true"></div></div>
+<div id="toast" role="status"></div>
+<div class="busy" id="busy"><div class="spin"></div></div>
+<div id="ovbar" hidden></div>
+<script>
+{
+const $=(s,r=document)=>r.querySelector(s), $$=(s,r=document)=>[...r.querySelectorAll(s)];
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const uid=()=>Math.random().toString(36).slice(2,10);
+const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
+const store={get(k,d){try{const v=localStorage.getItem('fd.'+k);return v==null?d:JSON.parse(v)}catch{return d}},set(k,v){try{localStorage.setItem('fd.'+k,JSON.stringify(v))}catch{}}};
+
+const P={cursor:'<path d="M5 3l14 8-6 2-3 6z"/>',type:'<path d="M5 7V5h14v2M9 19h6M12 5v14"/>',cal:'<rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',check:'<path d="M5 12.5l4.5 4.5L19 7"/>',x:'<path d="M6 6l12 12M18 6L6 18"/>',sign:'<path d="M3 17c2.5-5 4.5-9 6-9 2 0-1 8 1 8s3-5 5-5-0 4 2 4 2-2 4-2"/><path d="M3 21h18"/>',dl:'<path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/>',plus:'<path d="M12 5v14M5 12h14"/>',minus:'<path d="M5 12h14"/>',undo:'<path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 010 11H11"/>',redo:'<path d="M15 14l5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 000 11H13"/>',trash:'<path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/>',file:'<path d="M14 3H6.5v18h11V6.5z"/><path d="M14 3v3.5h3.5"/>',open:'<path d="M3 7V5.5A1.5 1.5 0 014.5 4H9l2 2.5h8.5A1.5 1.5 0 0121 8v1"/><path d="M3 9h18l-2 10H5z"/>',pen:'<path d="M4 20h4L19 9l-4-4L4 16z"/>',spark:'<path d="M12 3l1.8 5.6L19.5 10l-5.7 1.6L12 17l-1.8-5.4L4.5 10l5.7-1.4z"/><path d="M19 16l.8 2.2L22 19l-2.2.8L19 22l-.8-2.2L16 19l2.2-.8z"/>',list:'<path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/>',circ:'<circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="3" fill="currentColor"/>',box:'<rect x="4.5" y="4.5" width="15" height="15" rx="2.5"/><path d="M8.5 12.2l2.4 2.4 4.6-5"/>',sel:'<rect x="3.5" y="6" width="17" height="12" rx="2"/><path d="M14.5 11l2 2 2-2"/>'};
+const ic=(n,s=18)=>`<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[n]}</svg>`;
+
+const TOOLS=[['fill','cursor','Fill'],['text','type','Text'],['date','cal','Date'],['check','check','Check'],['cross','x','Cross'],['sig','sign','Sign']];
+$('#tools').innerHTML=TOOLS.map(([k,i,l])=>`<button class="tb${k==='fill'?' on':''}" data-tool="${k}" title="${l}" aria-label="${l}">${ic(i)}<span>${l}</span></button>`).join('');
+$('#zout').innerHTML=ic('minus');$('#zin').innerHTML=ic('plus');$('#undo').innerHTML=ic('undo');$('#redo').innerHTML=ic('redo');
+$('#dl').innerHTML=ic('dl')+'Download';$('#openbtn').innerHTML=ic('open')+'Open a PDF';$('#aibtn').innerHTML=ic('spark')+'Fill with Claude';
+
+const S={doc:null,pdf:null,pages:[],fields:[],fmap:new Map(),values:{},init:{},labels:{},overlays:[],tool:'fill',sel:null,scale:1,fit:true,ink:'#1a1a1a',fsize:10,hist:[],future:[],lastCk:0,dirty:false};
+let DL=null,AI=null;
+const WORKER='https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/build/pdf.worker.min.js';
+const PJ=window.pdfjsLib;
+if(PJ){PJ.GlobalWorkerOptions.workerSrc=WORKER;try{PJ.GlobalWorkerOptions.workerPort=new Worker(URL.createObjectURL(new Blob([`importScripts("${WORKER}")`],{type:'text/javascript'})))}catch(e){}}
+
+/* ---------- UI helpers ---------- */
+let tt;
+function toast(msg,bad){const t=$('#toast');t.textContent=msg;t.className='on'+(bad?' bad':'');clearTimeout(tt);tt=setTimeout(()=>t.className='',bad?6000:3200)}
+const busy=on=>$('#busy').classList.toggle('on',on);
+function modal(html,bind){const m=$('#modal');$('#mcard').innerHTML=html;m.classList.add('on');const close=()=>m.classList.remove('on');bind&&bind($('#mcard'),close);return close}
+function ask(title,msg,ok='Continue'){return new Promise(res=>modal(`<h2>${esc(title)}</h2><p>${esc(msg)}</p><div class="foot"><button class="btn" data-a="n">Cancel</button><button class="btn go" data-a="y">${esc(ok)}</button></div>`,(c,close)=>{c.onclick=e=>{const a=e.target.closest('[data-a]');if(!a)return;close();res(a.dataset.a==='y')}}))}
+function prompt2(title,val,ok='Save'){return new Promise(res=>modal(`<h2>${esc(title)}</h2><input class="inp" id="pv" value="${esc(val)}"><div class="foot"><button class="btn" data-a="n">Cancel</button><button class="btn go" data-a="y">${esc(ok)}</button></div>`,(c,close)=>{const i=$('#pv',c);i.focus();i.select();const done=y=>{close();res(y?i.value.trim():null)};c.onclick=e=>{const a=e.target.closest('[data-a]');if(a)done(a.dataset.a==='y')};i.onkeydown=e=>{if(e.key==='Enter')done(true);if(e.key==='Escape')done(false)}}))}
+
+/* ---------- dates & matching ---------- */
+const MON=['January','February','March','April','May','June','July','August','September','October','November','December'];
+function today(){const d=new Date(),f=store.get('datefmt','YYYY-MM-DD'),p=n=>String(n).padStart(2,'0');const Y=d.getFullYear(),M=d.getMonth(),D=d.getDate();
+ return {'YYYY-MM-DD':`${Y}-${p(M+1)}-${p(D)}`,'DD/MM/YYYY':`${p(D)}/${p(M+1)}/${Y}`,'MM/DD/YYYY':`${p(M+1)}/${p(D)}/${Y}`,'MMM D, YYYY':`${MON[M].slice(0,3)} ${D}, ${Y}`,'D MMMM YYYY':`${D} ${MON[M]} ${Y}`}[f]||`${Y}-${p(M+1)}-${p(D)}`}
+const expand=v=>String(v||'').replace(/\{today\}/gi,today());
+const STOP=new Set(['the','of','and','or','your','no','number','num','nbr','to','for','a','in','if','please','print','enter']);
+const N=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]/g,'');
+const TOK=s=>String(s||'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim().split(' ').filter(w=>w.length>1&&!STOP.has(w));
+const SYN=[['name','fullname','physicianname','providername','doctorname','practitionername','physician','referringphysician','referringphysicianname','doctor','provider','prescriber','prescribername','signatoryname','clinicianname','clinician','mdname','referringprovider','referredby'],
+['firstname','givenname','fname','first'],['lastname','surname','familyname','lname','last'],
+['msp','msppractitioner','practitioner','practitionerid','mspbilling','billing','payee','pracid','mspid','mspprac','billingid','mspbillingnumber','mspcode'],
+['phone','telephone','tel','phonenumber','contact','officephone','clinicphone','telno','ph','businessphone','workphone'],
+['fax','faxnumber','facsimile','clinicfax','officefax'],['email','emailaddress','mail'],
+['address','streetaddress','mailingaddress','clinicaddress','officeaddress','street','businessaddress','addressline1'],
+['city','town','municipality','citytown'],['province','prov','state','provincestate'],['postalcode','postal','zip','zipcode','postcode'],
+['date','today','todaysdate','datesigned','signaturedate','dateofrequest','requestdate','datecompleted','completeddate','datereferral','referraldate','datecompletedform'],
+['clinic','clinicname','facility','office','practicename','practice','organization','organisation','site','hospital','facilityname','department'],
+['specialty','speciality','discipline'],['college','cpsbc','collegeid','license','licence','collegeregistration','registration','cps']];
+const SYNI=new Map();SYN.forEach((g,i)=>g.forEach(w=>SYNI.set(w,i)));
+const QUAL=[/\b(patient|client|child|member|spouse|parent|guardian|employee|claimant|insured|beneficiary|witness|specialist|consultant|recipient|caregiver|family|emergency|next of kin|pharmacy)\b/i,/\b(birth|dob|born|expiry|expiration|admission|discharge|onset|injury|appointment|death|last seen|visit)\b/i];
+function score(a,b){const va=vars(a),vb=vars(b);if(va.length>1||vb.length>1){let m=0;for(const x of va)for(const y of vb)m=Math.max(m,score1(x,y));return m}return score1(a,b)}
+function vars(s){s=String(s||'');const m=s.match(/^(.*?)\(([^)]+)\)(.*)$/);return m?[s,(m[1]+m[3]).trim(),m[2].trim()].filter(Boolean):[s]}
+function score1(a,b){const na=N(a),nb=N(b);if(!na||!nb)return 0;let s=0;
+ if(na===nb)s=1;else{const ta=TOK(a),tb=TOK(b);const ja=ta.join(''),jb=tb.join('');
+  if(ja&&ja===jb)s=.95;const g1=SYNI.get(ja)??SYNI.get(na),g2=SYNI.get(jb)??SYNI.get(nb);if(g1!=null&&g1===g2)s=Math.max(s,.9);
+  if(ta.length&&tb.length){const A=new Set(ta),B=new Set(tb);let i=0;A.forEach(x=>B.has(x)&&i++);s=Math.max(s,i/(A.size+B.size-i))}
+  if(Math.min(ja.length,jb.length)>=4&&(ja.includes(jb)||jb.includes(ja)))s=Math.max(s,.7)}
+ for(const q of QUAL)if(q.test(a)!==q.test(b))s*=.35;return s}
+
+/* ---------- PDF loading ---------- */
+function prettify(n){let s=String(n).split('.').pop().replace(/\[\d+\]/g,'').replace(/[_\-]+/g,' ').replace(/([a-z])([A-Z])/g,'$1 $2').replace(/\s+/g,' ').trim();return s?s[0].toUpperCase()+s.slice(1):String(n)}
+const CRY=/^(text|textfield|text field|field|fill|fill text|check ?box|checkbox|cb|chk|check|radio|radio button|button|untitled|txt|tf|dropdown|combo ?box|list ?box|group|choice)\s*[\d_ .]*$/i;
+const cryptic=s=>!s||s.length<3||CRY.test(s)||/^[a-z]{0,3}\s?\d+([_ .]\d+)*$/i.test(s);
+const nrect=r=>[Math.min(r[0],r[2]),Math.min(r[1],r[3]),Math.max(r[0],r[2]),Math.max(r[1],r[3])];
+function cleanLbl(s,keep){s=s.replace(/_{2,}|\.{3,}|…/g,' ').replace(/\s+/g,' ').trim();if(keep)s=s.replace(/:$/,'');else{const parts=s.split(/:/).map(x=>x.trim()).filter(Boolean);s=parts.pop()||''}s=s.replace(/\s*\*+$/,'').trim();const w=s.split(' ');if(w.length>7)s=w.slice(-7).join(' ');return s.slice(0,70)}
+function nearLeft(items,r,others){const[x1,y1,x2,y2]=nrect(r);const mid=(y1+y2)/2;let lim=x1-260;
+ for(const o of others){const[a,b,c,d]=nrect(o);if(c<=x1+1&&d>mid&&b<mid&&c>lim)lim=c}
+ let s=cleanLbl(items.filter(t=>t.y>y1-5&&t.y<y2+2&&t.x2<=x1+6&&t.x>=lim-2).sort((a,b)=>a.x-b.x).map(t=>t.s).join(' '));
+ if(s.length<2){const ab=items.filter(t=>t.y>=y2-2&&t.y<=y2+24&&t.x<x2&&t.x2>x1-12).sort((a,b)=>a.y-b.y);if(ab.length){const yy=ab[0].y;s=cleanLbl(ab.filter(t=>Math.abs(t.y-yy)<2.5).sort((a,b)=>a.x-b.x).map(t=>t.s).join(' '))}}
+ return s}
+function nearRight(items,r){const[x1,y1,x2,y2]=nrect(r);const row=items.filter(t=>t.y>y1-5&&t.y<y2+3&&t.x>=x2-2&&t.x<x2+220).sort((a,b)=>a.x-b.x);let out=[],end=x2;for(const t of row){if(t.x-end>14)break;out.push(t.s);end=t.x2}return cleanLbl(out.join(' '),true)}
+async function textItems(pg){try{const tc=await pg.getTextContent();return tc.items.filter(i=>i.str&&i.str.trim()).map(i=>({s:i.str.trim(),x:i.transform[4],y:i.transform[5],x2:i.transform[4]+i.width}))}catch{return[]}}
+
+async function openBytes(bytes,name,saved){
+ if(!PJ||!window.PDFLib){toast('The PDF libraries did not load. Check your connection and reload.',true);return}
+ busy(true);
+ try{
+  const pdf=await PJ.getDocument({data:bytes.slice()}).promise;
+  if(S.pdf)try{S.pdf.destroy()}catch{}
+  Object.assign(S,{pdf,doc:{id:saved?.id||null,name,bytes:bytes.slice(),blank:!!saved?.blank},pages:[],fields:[],fmap:new Map(),values:{},init:{},labels:{...(saved?.labels||{})},overlays:saved?.overlays?JSON.parse(JSON.stringify(saved.overlays)):[],sel:null,hist:[],future:[],dirty:false});
+  for(let n=1;n<=pdf.numPages;n++){
+   const pg=await pdf.getPage(n);const info={n,pg,widgets:[],items:null,el:null,vp:null};
+   let anns=[];try{anns=await pg.getAnnotations()}catch{}
+   for(const a of anns){
+    if(a.annotationType!==20||!a.fieldName||a.hidden)continue;
+    let type;if(a.fieldType==='Tx')type='text';else if(a.fieldType==='Btn'){if(a.pushButton)continue;type=a.radioButton?'radio':'checkbox'}else if(a.fieldType==='Ch')type='select';else continue;
+    let f=S.fmap.get(a.fieldName);
+    if(!f){f={name:a.fieldName,type,multi:!!a.multiLine,options:(a.options||[]).map(o=>({v:String(o.exportValue??o.displayValue),t:String(o.displayValue??o.exportValue)})),maxLen:a.maxLen||0,ro:!!a.readOnly,alt:(a.alternativeText||'').trim(),widgets:[],page:n,auto:''};S.fmap.set(f.name,f);S.fields.push(f);
+     S.values[f.name]=(type==='text'||type==='select')?String(Array.isArray(a.fieldValue)?(a.fieldValue[0]??''):(a.fieldValue??'')):''}
+    const w={f,rect:a.rect,page:n,on:String(type==='radio'?a.buttonValue:(a.exportValue||'Yes')),t:''};
+    if(type==='checkbox'&&a.fieldValue&&a.fieldValue!=='Off'&&a.fieldValue===w.on)S.values[f.name]=w.on;
+    if(type==='radio'&&a.fieldValue&&a.fieldValue===a.buttonValue)S.values[f.name]=w.on;
+    f.widgets.push(w);info.widgets.push(w)}
+   if(info.widgets.length){info.items=await textItems(pg);const rects=info.widgets.map(w=>w.rect);
+    for(const w of info.widgets){if(w.f.type==='checkbox'||w.f.type==='radio')w.t=nearRight(info.items,w.rect);
+     const f=w.f;if(f.widgets[0]===w&&!f.auto){const pn=prettify(f.name);
+      const nl=f.type==='checkbox'&&w.t?w.t:nearLeft(info.items,w.rect,rects.filter(r=>r!==w.rect));f.auto=(f.alt&&!cryptic(f.alt)&&f.alt.length<90)?f.alt:(nl&&nl.length>1)?nl:pn}}}
+   S.pages.push(info)}
+  S.init={...S.values};
+  if(saved?.values)for(const k in saved.values)if(S.fmap.has(k))S.values[k]=saved.values[k];
+  let xfa=false;try{const md=await pdf.getMetadata();xfa=!!md?.info?.IsXFAPresent}catch{}
+  $('#empty').style.display='none';$('#docname').textContent=name;$('#fdoc').textContent=name+' · ';$('#dl').disabled=false;
+  S.fit=true;layout();renderFields();renderTemplate();renderLibSave();updUndo();setReady();
+  if(xfa&&!S.fields.length)toast('This is an XFA (LiveCycle) form. Browsers cannot fill these directly; use Text and Check to write on it instead.',true);
+  else toast(S.fields.length?`${S.fields.length} fillable field${S.fields.length>1?'s':''} found`:'No fillable fields. Use Text, Date, Check and Sign to write on it.');
+ }catch(e){console.error(e);toast(/password/i.test(e?.message||'')?'This PDF is password protected.':'Could not open that PDF: '+(e?.message||e),true)}
+ finally{busy(false)}}
+
+async function openFile(file){
+ if(!file)return;if(!/pdf$/i.test(file.type)&&!/\.pdf$/i.test(file.name)){toast('That is not a PDF.',true);return}
+ if(S.dirty&&!(await ask('Open another PDF?','Your entries on the current form have not been downloaded or saved.','Open anyway')))return;
+ openBytes(new Uint8Array(await file.arrayBuffer()),file.name)}
+
+/* ---------- layout & rendering ---------- */
+const io=new IntersectionObserver(es=>{for(const e of es)if(e.isIntersecting){const info=S.pages.find(i=>i.el===e.target);if(info&&!info.rendered)renderCanvas(info)}},{root:$('#desk'),rootMargin:'800px 0px'});
+function layout(){
+ if(!S.pdf)return;io.disconnect();
+ for(const p of S.pages)if(p.task)try{p.task.cancel()}catch{}
+ if(S.fit){const avail=$('#desk').clientWidth-(innerWidth<900?20:48);const w0=S.pages[0].pg.getViewport({scale:1}).width;S.scale=clamp(avail/w0,.4,2.4)}
+ const host=$('#pages');host.innerHTML='';
+ for(const info of S.pages){const vp=info.pg.getViewport({scale:S.scale});info.vp=vp;info.rendered=false;
+  const el=document.createElement('div');el.className='page';el.style.width=vp.width+'px';el.style.height=vp.height+'px';el.dataset.n=info.n;
+  el.innerHTML=`<canvas></canvas><div class="wl"></div><div class="ol"></div><span class="pno">Page ${info.n} of ${S.pages.length}</span>`;
+  info.el=el;host.appendChild(el);io.observe(el)}
+ refreshLayers();$('#zl').textContent=Math.round(S.scale*100)+'%'}
+async function renderCanvas(info){info.rendered=true;const c=info.el.querySelector('canvas'),vp=info.vp,dpr=Math.min(devicePixelRatio||1,2);
+ c.width=Math.floor(vp.width*dpr);c.height=Math.floor(vp.height*dpr);c.style.width=vp.width+'px';c.style.height=vp.height+'px';
+ try{info.task=info.pg.render({canvasContext:c.getContext('2d'),viewport:vp,transform:dpr!==1?[dpr,0,0,dpr,0,0]:null,annotationMode:PJ.AnnotationMode.ENABLE_FORMS});await info.task.promise}catch(e){if(e?.name!=='RenderingCancelledException')console.warn(e)}}
+function vrect(vp,r){const[a,b]=vp.convertToViewportPoint(r[0],r[1]),[c,d]=vp.convertToViewportPoint(r[2],r[3]);return[Math.min(a,c),Math.min(b,d),Math.max(a,c),Math.max(b,d)]}
+function refreshLayers(){for(const p of S.pages){renderWidgets(p);renderOverlays(p)}placeBar()}
+const label=f=>S.labels[f.name]||f.auto||prettify(f.name);
+function renderWidgets(info){
+ const wl=info.el.querySelector('.wl');wl.innerHTML='';
+ const ws=info.widgets.slice().sort((a,b)=>Math.round(-nrect(a.rect)[3]/6)-Math.round(-nrect(b.rect)[3]/6)||nrect(a.rect)[0]-nrect(b.rect)[0]);
+ for(const w of ws){const f=w.f;const[l,t,r,b]=vrect(info.vp,w.rect);const W=r-l,H=b-t;let el;const v=S.values[f.name];
+  if(f.type==='text'){el=document.createElement(f.multi?'textarea':'input');if(!f.multi)el.type='text';el.value=v||'';if(f.maxLen)el.maxLength=f.maxLen;
+   el.style.fontSize=(f.multi?Math.min(10*S.scale,H*.5):clamp(H*.66,6,12.5*S.scale))+'px';el.spellcheck=true;el.addEventListener('input',()=>setVal(f.name,el.value,el))}
+  else if(f.type==='checkbox'||f.type==='radio'){el=document.createElement('input');el.type=f.type;if(f.type==='radio')el.name='r_'+f.name+'_'+info.n;el.checked=v===w.on;el.dataset.on=w.on;
+   el.addEventListener('click',()=>{const nv=f.type==='checkbox'?(el.checked?w.on:''):(S.values[f.name]===w.on?'':w.on);setVal(f.name,nv,null,true)})}
+  else{el=document.createElement('select');el.innerHTML='<option value=""></option>'+f.options.map(o=>`<option value="${esc(o.v)}">${esc(o.t||o.v)}</option>`).join('');
+   if(v&&!f.options.some(o=>o.v===v))el.insertAdjacentHTML('beforeend',`<option value="${esc(v)}">${esc(v)}</option>`);el.value=v||'';el.style.fontSize=clamp(H*.6,6,12*S.scale)+'px';el.addEventListener('change',()=>setVal(f.name,el.value,el,true))}
+  el.className='w w-'+f.type+(v?' filled':'');el.dataset.f=f.name;Object.assign(el.style,{left:l+'px',top:t+'px',width:W+'px',height:H+'px'});
+  const lb=label(f)+(w.t&&f.type==='radio'?': '+w.t:'');el.title=lb;el.setAttribute('aria-label',lb);if(f.ro)el.disabled=true;
+  el.addEventListener('focus',()=>hiRow(f.name,true));el.addEventListener('blur',()=>hiRow(f.name,false));wl.appendChild(el)}}
+function syncField(name,src){const v=S.values[name];for(const el of $$(`.w[data-f="${CSS.escape(name)}"]`)){if(el!==src){if(el.type==='checkbox'||el.type==='radio')el.checked=v===el.dataset.on;else el.value=v}el.classList.toggle('filled',!!v)}}
+function setVal(name,v,src,discrete){checkpoint(discrete);S.values[name]=v;S.dirty=true;syncField(name,src);updRow(name);updCount()}
+
+/* ---------- overlays ---------- */
+const mctx=document.createElement('canvas').getContext('2d');
+function fitText(o){mctx.font=`${o.size}px Helvetica, Arial, sans-serif`;const lines=(o.text||'').split('\n');const w=Math.max(...lines.map(l=>mctx.measureText(l).width))+4;o.w=Math.max(o.w,w);o.h=Math.max(lines.length*o.size*1.2+1,o.size*1.2+1)}
+function posOv(el,o){const info=S.pages[o.page-1];const[l,t]=info.vp.convertToViewportPoint(o.x,o.y);Object.assign(el.style,{left:l+'px',top:t+'px',width:o.w*S.scale+'px',height:o.h*S.scale+'px'})}
+function renderOverlays(info){const ol=info.el.querySelector('.ol');ol.innerHTML='';for(const o of S.overlays)if(o.page===info.n)ol.appendChild(ovEl(o))}
+function ovEl(o){const el=document.createElement('div');el.className='ov ov-'+o.kind+(S.sel===o.id?' sel':'');el.dataset.id=o.id;el.style.color=o.color;posOv(el,o);
+ if(o.kind==='text'){const ta=document.createElement('textarea');ta.value=o.text;ta.wrap='off';ta.spellcheck=true;ta.style.fontSize=o.size*S.scale+'px';ta.setAttribute('aria-label',o.label||'Text box');ta.title=o.label||'';
+  ta.addEventListener('input',()=>{checkpoint();o.text=ta.value;fitText(o);posOv(el,o);S.dirty=true;updRow('ov:'+o.id);updCount()});ta.addEventListener('focus',()=>select(o.id));el.appendChild(ta)}
+ else if(o.kind==='check')el.innerHTML='<svg viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M15 55L40 80L85 18" fill="none" stroke="currentColor" stroke-width="13" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke" style="stroke-width:'+Math.max(1.5,Math.min(o.w,o.h)*.13*S.scale)+'px"/></svg>';
+ else if(o.kind==='cross')el.innerHTML='<svg viewBox="0 0 100 100" preserveAspectRatio="none"><path d="M18 18L82 82M82 18L18 82" fill="none" stroke="currentColor" stroke-linecap="round" vector-effect="non-scaling-stroke" style="stroke-width:'+Math.max(1.5,Math.min(o.w,o.h)*.12*S.scale)+'px"/></svg>';
+ else if(o.kind==='sig'){const im=new Image();im.src=o.src;im.alt='Signature';im.draggable=false;el.appendChild(im)}
+ el.insertAdjacentHTML('beforeend','<span class="grip" title="Drag to move"></span><span class="rs" title="Drag to resize"></span>');
+ el.addEventListener('pointerdown',e=>{if(e.target.closest('#ovbar'))return;const rs=e.target.classList.contains('rs'),grip=e.target.classList.contains('grip');
+  if(o.kind==='text'&&!rs&&!grip){select(o.id);return}
+  e.preventDefault();e.stopPropagation();select(o.id);checkpoint(true);const sx=e.clientX,sy=e.clientY,o0={...o};el.setPointerCapture(e.pointerId);
+  const mv=ev=>{const dx=(ev.clientX-sx)/S.scale,dy=(ev.clientY-sy)/S.scale;
+   if(rs){o.w=Math.max(6,o0.w+dx);o.h=o.kind==='sig'&&o.ratio?o.w/o.ratio:Math.max(6,o0.h+dy);if(o.kind==='text'){o.size=clamp(o0.size*(o.h/o0.h),5,48);o.h=o0.h*(o.size/o0.size);const ta=$('textarea',el);ta.style.fontSize=o.size*S.scale+'px'}}
+   else{o.x=o0.x+dx;o.y=o0.y-dy}posOv(el,o)};
+  const up=()=>{el.removeEventListener('pointermove',mv);el.removeEventListener('pointerup',up);S.dirty=true;if(o.kind==='text'){fitText(o);posOv(el,o)}if(o.kind!=='text'&&o.kind!=='sig'){const old=el;const nw=ovEl(o);old.replaceWith(nw);placeBar()}};
+  el.addEventListener('pointermove',mv);el.addEventListener('pointerup',up)});
+ return el}
+function select(id){if(S.sel===id)return;S.sel=id;$$('.ov').forEach(e=>e.classList.toggle('sel',e.dataset.id===id));placeBar()}
+function placeBar(){const bar=$('#ovbar');const o=S.overlays.find(x=>x.id===S.sel);const el=o&&$(`.ov[data-id="${o.id}"]`);if(!el){bar.hidden=true;document.body.appendChild(bar);return}
+ bar.innerHTML=(o.kind==='text'?`<button data-a="sm" title="Smaller text" aria-label="Smaller text">${ic('minus',16)}</button><span class="sz">${Math.round(o.size)}pt</span><button data-a="lg" title="Larger text" aria-label="Larger text">${ic('plus',16)}</button><input data-a="lbl" placeholder="Label for profiles & Smart fill" value="${esc(o.label||'')}" aria-label="Label">`:'')+`<button data-a="del" title="Delete (Del)" aria-label="Delete">${ic('trash',16)}</button>`;
+ bar.hidden=false;el.appendChild(bar)}
+$('#ovbar').addEventListener('pointerdown',e=>e.stopPropagation());
+$('#ovbar').addEventListener('click',e=>{const a=e.target.closest('button')?.dataset.a;const o=S.overlays.find(x=>x.id===S.sel);if(!a||!o)return;
+ if(a==='del')delOv(o.id);else{checkpoint(true);o.size=clamp(o.size+(a==='lg'?1:-1),5,48);S.fsize=o.size;o.w=0;fitText(o);rerenderOv(o)}});
+$('#ovbar').addEventListener('input',e=>{if(e.target.dataset.a!=='lbl')return;const o=S.overlays.find(x=>x.id===S.sel);if(!o)return;o.label=e.target.value;S.dirty=true;renderFields()});
+function rerenderOv(o){const old=$(`.ov[data-id="${o.id}"]`);if(!old)return;const nw=ovEl(o);old.replaceWith(nw);placeBar()}
+function delOv(id){checkpoint(true);S.overlays=S.overlays.filter(o=>o.id!==id);S.sel=null;S.dirty=true;$(`.ov[data-id="${id}"]`)?.remove();placeBar();renderFields()}
+async function place(tool,info,px,py){
+ checkpoint(true);const color=S.ink;let o;
+ if(tool==='text'||tool==='date'){const size=S.fsize,h=size*1.2+1;o={id:uid(),kind:'text',page:info.n,x:px-2,y:py+h/2,w:tool==='date'?60:120,h,size,text:tool==='date'?today():'',label:'',color};
+  if(!info.items)info.items=await textItems(info.pg);o.label=tool==='date'?'Date':nearLeft(info.items,[o.x,o.y-h,o.x+o.w,o.y],[...info.widgets.map(w=>w.rect),...S.overlays.filter(x=>x.page===info.n).map(x=>[x.x,x.y-x.h,x.x+x.w,x.y])]);fitText(o)}
+ else if(tool==='check'||tool==='cross'){const s=11;o={id:uid(),kind:tool,page:info.n,x:px-s/2,y:py+s/2,w:s,h:s,color}}
+ else if(tool==='sig'){const pr=curProfile();if(!pr.sig){toast('Draw or upload your signature first.');drawSig(()=>place(tool,info,px,py));return}
+  const w=130,h=w/(pr.sig.ratio||3);o={id:uid(),kind:'sig',page:info.n,x:px-w/2,y:py+h/2,w,h,ratio:pr.sig.ratio||3,src:pr.sig.src,color}}
+ S.overlays.push(o);S.dirty=true;info.el.querySelector('.ol').appendChild(ovEl(o));S.sel=null;select(o.id);
+ if(o.kind==='text'){$(`.ov[data-id="${o.id}"] textarea`)?.focus();setTool('fill')}else if(o.kind==='sig')setTool('fill');
+ renderFields()}
+$('#pages').addEventListener('pointerdown',e=>{
+ if(e.target.closest('.ov'))return;
+ if(S.tool==='fill'){if(!e.target.closest('#ovbar'))select(null);return}
+ const pe=e.target.closest('.page');if(!pe)return;e.preventDefault();const info=S.pages[+pe.dataset.n-1];const r=pe.getBoundingClientRect();
+ const[px,py]=info.vp.convertToPdfPoint(e.clientX-r.left,e.clientY-r.top);place(S.tool,info,px,py)});
+function setTool(t){S.tool=t;$$('[data-tool]').forEach(b=>b.classList.toggle('on',b.dataset.tool===t));document.body.classList.toggle('placing',t!=='fill')}
+$('#tools').addEventListener('click',e=>{const b=e.target.closest('[data-tool]');if(!b)return;if(!S.pdf){toast('Open a PDF first.');return}setTool(b.dataset.tool);
+ if(b.dataset.tool!=='fill')toast({text:'Click where the text should go.',date:'Click to stamp today’s date.',check:'Click each box to tick it. Esc when done.',cross:'Click each box to mark it. Esc when done.',sig:'Click where you sign.'}[b.dataset.tool])});
+$$('.ink').forEach(b=>b.onclick=()=>{S.ink=b.dataset.ink;$$('.ink').forEach(x=>x.classList.toggle('on',x===b));const o=S.overlays.find(x=>x.id===S.sel);if(o&&o.kind!=='sig'){checkpoint(true);o.color=S.ink;rerenderOv(o)}});
+
+/* ---------- undo ---------- */
+const snap=()=>JSON.stringify({v:S.values,o:S.overlays});
+function checkpoint(force){const now=Date.now();const quick=now-S.lastCk<1200;S.lastCk=now;if(!force&&quick)return;S.hist.push(snap());if(S.hist.length>100)S.hist.shift();S.future=[];updUndo()}
+function restore(s){const d=JSON.parse(s);S.values=d.v;S.overlays=d.o;S.sel=null;S.dirty=true;refreshLayers();renderFields()}
+function undo(){if(!S.hist.length)return;S.future.push(snap());restore(S.hist.pop());S.lastCk=0;updUndo()}
+function redo(){if(!S.future.length)return;S.hist.push(snap());restore(S.future.pop());S.lastCk=0;updUndo()}
+function updUndo(){$('#undo').disabled=!S.hist.length;$('#redo').disabled=!S.future.length}
+$('#undo').onclick=undo;$('#redo').onclick=redo;
+
+/* ---------- zoom ---------- */
+function zoom(f){if(!S.pdf)return;const d=$('#desk');const cy=(d.scrollTop+d.clientHeight/2)/d.scrollHeight;S.fit=false;S.scale=clamp(S.scale*f,.4,3);layout();d.scrollTop=cy*d.scrollHeight-d.clientHeight/2}
+$('#zin').onclick=()=>zoom(1.15);$('#zout').onclick=()=>zoom(1/1.15);$('#zfit').onclick=()=>{S.fit=true;layout()};
+let lastW=0,rt;new ResizeObserver(()=>{const w=$('#desk').clientWidth;if(Math.abs(w-lastW)<10)return;lastW=w;clearTimeout(rt);rt=setTimeout(()=>{if(S.fit)layout()},160)}).observe($('#desk'));
+
+/* ---------- fields panel ---------- */
+function targets(){const t=S.fields.filter(f=>!f.ro).map(f=>({id:f.name,label:label(f),type:f.type,f,page:f.page}));
+ for(const o of S.overlays)if(o.kind==='text'&&o.label)t.push({id:'ov:'+o.id,label:o.label,type:'text',o,page:o.page});return t}
+function disp(t){if(t.o)return t.o.text||'';const f=t.f,v=S.values[f.name];if(!v)return'';if(f.type==='checkbox')return'Checked';if(f.type==='radio'){const w=f.widgets.find(w=>w.on===v);return w?.t||v}if(f.type==='select')return f.options.find(o=>o.v===v)?.t||v;return v}
+const TIC={text:'type',checkbox:'box',radio:'circ',select:'sel'};
+function renderFields(){const q=$('#fq').value.trim().toLowerCase();const T=targets();
+ if(!S.pdf){$('#flist').innerHTML='';return}
+ if(!T.length){$('#flist').innerHTML=`<div class="note">This PDF has no fillable fields. Use <b>Text</b>, <b>Date</b>, <b>Check</b> and <b>Sign</b> in the toolbar to write on it. Text boxes pick up a label from the words beside them, so profiles and Smart fill can fill them too.</div>`;updCount();return}
+ let html='',pg=0;for(const t of T.filter(t=>!q||t.label.toLowerCase().includes(q)).sort((a,b)=>a.page-b.page)){if(t.page!==pg){pg=t.page;html+=`<div class="pg">Page ${pg}</div>`}const v=disp(t);
+  html+=`<div class="fr${v?' done':''}" data-t="${esc(t.id)}" tabindex="0" role="button"><span class="ic">${ic(t.o?'pen':TIC[t.type],16)}</span><span class="lb">${esc(t.label)}</span><span class="vl">${esc(v)}</span><button class="ren" title="Rename" aria-label="Rename ${esc(t.label)}">${ic('pen',14)}</button></div>`}
+ $('#flist').innerHTML=html||'<p class="lead">No fields match.</p>';updCount()}
+function updRow(id){const row=$(`.fr[data-t="${CSS.escape(id)}"]`);if(!row)return;const t=targets().find(x=>x.id===id);if(!t)return;const v=disp(t);row.querySelector('.vl').textContent=v;row.classList.toggle('done',!!v)}
+function updCount(){if(!S.pdf)return;const T=targets();const n=T.filter(t=>disp(t)).length;$('#fcount').textContent=T.length?`${n} of ${T.length} filled`:'Flat PDF: write on it with the toolbar.';$('#prapply').disabled=!T.length;$('#kvbtn').disabled=!T.length;setReady()}
+function hiRow(name,on){$$('.fr.hl').forEach(r=>r.classList.remove('hl'));if(on){const r=$(`.fr[data-t="${CSS.escape(name)}"]`);if(r){r.classList.add('hl');r.scrollIntoView({block:'nearest'})}}}
+function focusTarget(id){const el=id.startsWith('ov:')?$(`.ov[data-id="${CSS.escape(id.slice(3))}"] textarea`):$(`.w[data-f="${CSS.escape(id)}"]`);if(!el)return;el.scrollIntoView({block:'center',behavior:'smooth'});setTimeout(()=>el.focus({preventScroll:true}),250);if(innerWidth<900)$('#side').classList.remove('open')}
+$('#flist').addEventListener('click',e=>{const row=e.target.closest('.fr');if(!row)return;const id=row.dataset.t;
+ if(e.target.closest('.ren')){const lb=row.querySelector('.lb');const inp=document.createElement('input');inp.value=lb.textContent;lb.replaceWith(inp);inp.focus();inp.select();
+  const done=ok=>{if(ok&&inp.value.trim()){const v=inp.value.trim();if(id.startsWith('ov:')){const o=S.overlays.find(x=>x.id===id.slice(3));if(o)o.label=v}else S.labels[id]=v;S.dirty=true}renderFields();renderTemplate()};
+  inp.onkeydown=k=>{if(k.key==='Enter')done(true);if(k.key==='Escape')done(false)};inp.onblur=()=>done(true);inp.onclick=k=>k.stopPropagation();return}
+ if(e.target.tagName!=='INPUT')focusTarget(id)});
+$('#flist').addEventListener('keydown',e=>{if(e.key==='Enter'&&e.target.classList.contains('fr'))focusTarget(e.target.dataset.t)});
+$('#flist').addEventListener('mouseover',e=>{const row=e.target.closest('.fr');$$('.w.hl').forEach(x=>x.classList.remove('hl'));if(row&&!row.dataset.t.startsWith('ov:'))$$(`.w[data-f="${CSS.escape(row.dataset.t)}"]`).forEach(x=>x.classList.add('hl'))});
+$('#flist').addEventListener('mouseleave',()=>$$('.w.hl').forEach(x=>x.classList.remove('hl')));
+$('#fq').oninput=renderFields;
+
+/* ---------- apply values (profile, smart fill) ---------- */
+function coerce(t,raw){const s=String(raw??'').trim();if(t.o)return s;const f=t.f;
+ if(f.type==='checkbox')return/^(y|yes|true|1|x|checked|on|✓|✔)$/i.test(s)?f.widgets[0].on:'';
+ if(f.type==='radio'||f.type==='select'){const opts=f.type==='radio'?f.widgets.map(w=>({v:w.on,t:w.t||w.on})):f.options;const L=s.toLowerCase();
+  const hit=opts.find(o=>o.v.toLowerCase()===L||String(o.t).toLowerCase()===L)||(L?opts.find(o=>String(o.t).toLowerCase().startsWith(L)||L.startsWith(String(o.t).toLowerCase())&&o.t.length>2):null);
+  return hit?hit.v:(f.type==='select'?s:'')}
+ if(f.maxLen&&s.length>f.maxLen)return s.slice(0,f.maxLen);return s}
+function applyTo(t,val){if(t.o){t.o.text=val;fitText(t.o);rerenderOv(t.o)}else{S.values[t.f.name]=val;syncField(t.f.name)}}
+function review(host,props,title){
+ if(!props.length){host.innerHTML='<div class="note" style="margin-top:14px">Nothing to fill: no field on this form matched.</div>';return}
+ host.innerHTML=`<div class="rv"><h3>${esc(title)} · ${props.length} field${props.length>1?'s':''}</h3>${props.map((p,i)=>`<div class="rvi"><input type="checkbox" checked data-i="${i}" aria-label="Use"><div><div class="lb">${esc(p.t.label)}${p.from?` <span class="from">← ${esc(p.from)}</span>`:''}</div><input class="inp" data-v="${i}" value="${esc(p.value)}" aria-label="Value for ${esc(p.t.label)}"></div></div>`).join('')}<div class="row"><button class="btn go" data-a="apply">Fill these in</button><button class="btn" data-a="cancel">Discard</button></div></div>`;
+ host.onclick=e=>{const a=e.target.closest('[data-a]')?.dataset.a;if(!a)return;if(a==='cancel'){host.innerHTML='';return}
+  checkpoint(true);let n=0;props.forEach((p,i)=>{if(!$(`[data-i="${i}"]`,host).checked)return;const v=coerce(p.t,$(`[data-v="${i}"]`,host).value);if(p.t.type!=='checkbox'&&!v&&p.t.type!=='text')return;applyTo(p.t,v);n++});
+  S.dirty=true;host.innerHTML='';renderFields();toast(`Filled ${n} field${n===1?'':'s'}. Undo is in the toolbar.`)}}
+
+/* ---------- profiles ---------- */
+const DEF_ITEMS=['Full name','MSP practitioner number','College ID','Clinic name','Clinic address','City','Province','Postal code','Phone','Fax','Email','Date'].map(k=>({k,v:k==='Date'?'{today}':''}));
+let PR=store.get('profiles',null);if(!Array.isArray(PR)||!PR.length)PR=[{id:uid(),name:'My details',items:DEF_ITEMS,sig:null}];
+let PRA=store.get('profileActive',PR[0].id);
+const curProfile=()=>PR.find(p=>p.id===PRA)||PR[0];
+const savePR=()=>{store.set('profiles',PR);store.set('profileActive',PRA)};
+function renderProfile(){const p=curProfile();$('#prsel').innerHTML=PR.map(x=>`<option value="${esc(x.id)}"${x.id===p.id?' selected':''}>${esc(x.name)}</option>`).join('');
+ $('#kvs').innerHTML=p.items.map((it,i)=>`<div class="kv"><input class="inp" data-k="${i}" value="${esc(it.k)}" placeholder="Label" aria-label="Detail label"><input class="inp" data-v="${i}" value="${esc(it.v)}" placeholder="Value" aria-label="Value for ${esc(it.k)}"><button class="x" data-d="${i}" title="Remove" aria-label="Remove ${esc(it.k)}">${ic('x',16)}</button></div>`).join('');
+ $('#sigprev').innerHTML=p.sig?`<img src="${esc(p.sig.src)}" alt="Your signature">`:'No signature yet';$('#datefmt').value=store.get('datefmt','YYYY-MM-DD')}
+$('#kvs').addEventListener('input',e=>{const p=curProfile();const k=e.target.dataset.k,v=e.target.dataset.v;if(k!=null)p.items[k].k=e.target.value;if(v!=null)p.items[v].v=e.target.value;savePR()});
+$('#kvs').addEventListener('click',e=>{const d=e.target.closest('[data-d]')?.dataset.d;if(d==null)return;curProfile().items.splice(+d,1);savePR();renderProfile()});
+$('#kvadd').onclick=()=>{curProfile().items.push({k:'',v:''});savePR();renderProfile();$$('#kvs [data-k]').pop()?.focus()};
+$('#prsel').onchange=e=>{PRA=e.target.value;savePR();renderProfile()};
+$('#prnew').onclick=async()=>{const n=await prompt2('New profile','Another clinic','Create');if(!n)return;const p={id:uid(),name:n,items:JSON.parse(JSON.stringify(curProfile().items)).map(i=>({k:i.k,v:i.k==='Date'?'{today}':''})),sig:curProfile().sig};PR.push(p);PRA=p.id;savePR();renderProfile()};
+$('#prren').onclick=async()=>{const p=curProfile();const n=await prompt2('Rename profile',p.name);if(!n)return;p.name=n;savePR();renderProfile()};
+$('#prdel').onclick=async()=>{if(PR.length<2){toast('Keep at least one profile. Clear its details instead.');return}const p=curProfile();if(!(await ask('Delete profile?',`“${p.name}” and its signature will be removed from this browser.`,'Delete')))return;PR=PR.filter(x=>x!==p);PRA=PR[0].id;savePR();renderProfile()};
+$('#datefmt').onchange=e=>store.set('datefmt',e.target.value);
+$('#prapply').onclick=()=>{const p=curProfile();const items=p.items.filter(i=>i.k.trim()&&String(i.v).trim());if(!items.length){toast('Add a value to at least one detail first.');return}
+ const props=[];for(const t of targets()){let best=null,bs=0;for(const it of items){const s=score(t.label,it.k);if(s>bs){bs=s;best=it}}if(best&&bs>=.6&&(t.type==='text'||t.type==='select'))props.push({t,value:expand(best.v),from:best.k})}
+ review($('#prrev'),props,'Matches from '+p.name)};
+/* signature pad */
+function drawSig(after){modal(`<h2>Your signature</h2><p>Sign with a mouse, trackpad, finger or stylus. It is saved to the current profile in this browser only.</p><canvas id="sigc" width="900" height="300"></canvas><div class="foot"><button class="btn" data-a="clr">Clear</button><button class="btn" data-a="n">Cancel</button><button class="btn go" data-a="y">Save signature</button></div>`,(c,close)=>{
+ const cv=$('#sigc',c),x=cv.getContext('2d');x.lineCap=x.lineJoin='round';x.strokeStyle=S.ink;x.lineWidth=4.5;let dn=false,last=null,any=false;
+ const pt=e=>{const r=cv.getBoundingClientRect();return[(e.clientX-r.left)*cv.width/r.width,(e.clientY-r.top)*cv.height/r.height]};
+ cv.onpointerdown=e=>{dn=true;last=pt(e);cv.setPointerCapture(e.pointerId)};
+ cv.onpointermove=e=>{if(!dn)return;const p=pt(e);x.beginPath();x.moveTo(...last);const m=[(last[0]+p[0])/2,(last[1]+p[1])/2];x.quadraticCurveTo(last[0],last[1],m[0],m[1]);x.lineTo(...p);x.stroke();last=p;any=true};
+ cv.onpointerup=()=>dn=false;
+ c.onclick=e=>{const a=e.target.closest('[data-a]')?.dataset.a;if(a==='clr'){x.clearRect(0,0,cv.width,cv.height);any=false}if(a==='n')close();
+  if(a==='y'){if(!any){toast('Sign in the box first.');return}const s=trim(cv);if(s){curProfile().sig=s;savePR();renderProfile();close();after&&after()}}}})}
+function trim(cv){const x=cv.getContext('2d'),{width:W,height:H}=cv,d=x.getImageData(0,0,W,H).data;let a=W,b=H,c=0,e=0;
+ for(let y=0;y<H;y++)for(let i=0;i<W;i++)if(d[(y*W+i)*4+3]>8){if(i<a)a=i;if(i>c)c=i;if(y<b)b=y;if(y>e)e=y}
+ if(c<=a||e<=b)return null;a=Math.max(0,a-6);b=Math.max(0,b-6);c=Math.min(W,c+6);e=Math.min(H,e+6);const o=document.createElement('canvas');o.width=c-a;o.height=e-b;o.getContext('2d').drawImage(cv,a,b,c-a,e-b,0,0,c-a,e-b);return{src:o.toDataURL('image/png'),ratio:(c-a)/(e-b)}}
+$('#sigdraw').onclick=()=>drawSig();
+$('#sigdel').onclick=()=>{curProfile().sig=null;savePR();renderProfile()};
+$('#sigup').onchange=e=>{const f=e.target.files[0];if(!f)return;const im=new Image();im.onload=()=>{const cv=document.createElement('canvas');const sc=Math.min(1,900/im.width);cv.width=im.width*sc;cv.height=im.height*sc;const x=cv.getContext('2d');x.drawImage(im,0,0,cv.width,cv.height);
+ const d=x.getImageData(0,0,cv.width,cv.height);for(let i=0;i<d.data.length;i+=4){const l=(d.data[i]+d.data[i+1]+d.data[i+2])/3;if(l>200)d.data[i+3]=0}x.putImageData(d,0,0);const s=trim(cv);if(s){curProfile().sig=s;savePR();renderProfile();toast('Signature saved. White background removed.')}URL.revokeObjectURL(im.src)};im.src=URL.createObjectURL(f);e.target.value=''};
+
+/* ---------- smart fill ---------- */
+function setReady(){const has=!!S.pdf&&targets().length>0;const key=store.get('apikey','');$('#aibtn').disabled=!has||!(AI||key);
+ $('#aistate').textContent=!AI&&!key?'Smart fill with Claude is available when this page is opened in Claude, or with your own API key below. You can still match “Label: value” lines.':AI?'Your pasted text and the field labels are sent to Claude.':'Your pasted text and the field labels are sent to Anthropic with your API key.';
+ $('#keydet').style.display=AI?'none':''}
+async function callClaude(prompt){
+ if(AI){const r=await AI(prompt,{modelTier:'default'});return r.text}
+ const key=store.get('apikey','');const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'content-type':'application/json','x-api-key':key,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-access':'true'},body:JSON.stringify({model:'claude-sonnet-5-5',max_tokens:4096,messages:[{role:'user',content:prompt}]})});
+ const j=await res.json();if(!res.ok)throw new Error(j?.error?.message||res.status);return j.content.map(c=>c.text||'').join('')}
+$('#aibtn').onclick=async()=>{const text=$('#smtext').value.trim();if(!text){toast('Paste some text first.');return}const T=targets();
+ const list=T.map((t,i)=>{const o={id:'f'+(i+1),label:t.label,type:t.type==='select'?'choice':t.type,page:t.page};if(t.f?.type==='radio')o.options=t.f.widgets.map(w=>w.t||w.on);if(t.f?.type==='select')o.options=t.f.options.map(x=>x.t);if(t.f?.maxLen)o.maxLength=t.f.maxLen;if(t.f?.multi)o.multiline=true;return o});
+ const prompt=`You are filling in a PDF form from the user's text.\n\nForm fields (JSON):\n${JSON.stringify(list)}\n\nText:\n"""\n${text}\n"""\n\nToday is ${new Date().toDateString()}. Reply with ONLY a JSON object that maps field id to the value to enter.\nRules:\n- Include only fields the text clearly answers. Never guess or invent anything.\n- checkbox: "yes" or "no". radio and choice: one of the listed options, copied exactly.\n- Respect maxLength. Use line breaks only for multiline fields.\n- Dates: use the format the form's label implies, otherwise YYYY-MM-DD.\n- No commentary, no code fences.`;
+ const b=$('#aibtn');b.disabled=true;b.innerHTML=ic('spark')+'Reading…';
+ try{const out=await callClaude(prompt);const m=out.match(/\{[\s\S]*\}/);if(!m)throw new Error('Claude did not return any values.');const obj=JSON.parse(m[0]);
+  const props=Object.entries(obj).map(([id,v])=>{const t=T[+String(id).slice(1)-1];return t&&v!=null&&String(v).trim()!==''?{t,value:String(v)}:null}).filter(Boolean);review($('#smrev'),props,'Suggested by Claude')}
+ catch(e){const c=e?.code;toast(c==='not_granted'?'Smart fill was not allowed for this page.':c==='rate_limited'?'Claude is busy. Try again in a moment.':'Smart fill failed: '+(e?.message||e),true)}
+ finally{b.innerHTML=ic('spark')+'Fill with Claude';setReady()}};
+$('#kvbtn').onclick=()=>{const T=targets();const props=[];const seen=new Set();
+ for(const line of $('#smtext').value.split('\n')){const i=line.indexOf(':');if(i<1)continue;const k=line.slice(0,i).trim(),v=line.slice(i+1).trim();if(!v)continue;
+  let best=null,bs=0;for(const t of T){const s=score(k,t.label);if(s>bs){bs=s;best=t}}if(best&&bs>=.6&&!seen.has(best.id)){seen.add(best.id);props.push({t:best,value:v,from:k})}}
+ review($('#smrev'),props,'Matched lines')};
+function renderTemplate(){$('#tpl').value=targets().map(t=>`${t.label}: `).join('\n')}
+$('#tplcopy').onclick=async()=>{try{await navigator.clipboard.writeText($('#tpl').value);toast('Template copied.')}catch{$('#tpl').select();toast('Press Ctrl+C (⌘C) to copy.')}};
+$('#keysave').onclick=()=>{const v=$('#apikey').value.trim();if(!v)return;store.set('apikey',v);$('#apikey').value='';toast('Key saved in this browser.');setReady()};
+$('#keyclear').onclick=()=>{store.set('apikey','');toast('Key removed.');setReady()};
+
+/* ---------- library (IndexedDB) ---------- */
+const DB={p:null,open(){return this.p||(this.p=new Promise((res,rej)=>{try{const r=indexedDB.open('formdesk',1);r.onupgradeneeded=()=>r.result.createObjectStore('forms',{keyPath:'id'});r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)}catch(e){rej(e)}}))},
+ async run(mode,fn){const db=await this.open();return new Promise((res,rej)=>{const t=db.transaction('forms',mode);const r=fn(t.objectStore('forms'));t.oncomplete=()=>res(r?.result);t.onerror=()=>rej(t.error)})},
+ all(){return this.run('readonly',s=>s.getAll())},get(id){return this.run('readonly',s=>s.get(id))},put(v){return this.run('readwrite',s=>s.put(v))},del(id){return this.run('readwrite',s=>s.delete(id))}};
+function renderLibSave(){const h=$('#libsave');if(!S.pdf){h.innerHTML='<div class="note">Open a PDF to save it here.</div>';return}
+ h.innerHTML=`<label class="f" for="libname">Name</label><input class="inp" id="libname" value="${esc(S.doc.name.replace(/\.pdf$/i,''))}"><div class="row" style="margin-top:10px"><button class="btn go" data-a="full">${S.doc.id&&!S.doc.blank?'Update saved copy':'Save with entries'}</button><button class="btn" data-a="blank">Save as blank template</button></div>`;
+ h.onclick=async e=>{const a=e.target.closest('[data-a]')?.dataset.a;if(!a)return;const blank=a==='blank';const name=$('#libname').value.trim()||S.doc.name;
+  const values={};if(!blank)Object.assign(values,S.values);
+  const overlays=S.overlays.filter(o=>!blank||o.kind==='text').map(o=>blank?{...o,text:o.label==='Date'?today():''}:{...o});
+  const id=(!blank&&S.doc.id&&!S.doc.blank)?S.doc.id:uid();
+  try{await DB.put({id,name,bytes:S.doc.bytes.buffer.slice(0),values,labels:S.labels,overlays,blank,updated:Date.now(),pages:S.pages.length,size:S.doc.bytes.length});if(!blank){S.doc.id=id;S.dirty=false}toast(blank?'Blank template saved.':'Saved to your library.');renderLib();renderLibSave()}
+  catch(err){toast('Could not save here: this browser is blocking storage.',true)}}}
+async function renderLib(){let all=[];try{all=(await DB.all()).sort((a,b)=>b.updated-a.updated)}catch{}
+ const row=x=>`<div class="li"><span class="ic">${ic('file',18)}</span><div><b>${esc(x.name)}</b><small>${x.pages} page${x.pages>1?'s':''} · ${new Date(x.updated).toLocaleDateString()}<span class="tag">${x.blank?'Template':'With entries'}</span></small></div><div class="row"><button class="btn sm" data-open="${esc(x.id)}">Open</button><button class="x" style="width:34px;height:34px" data-del="${esc(x.id)}" title="Delete" aria-label="Delete ${esc(x.name)}">${ic('trash',16)}</button></div></div>`;
+ $('#liblist').innerHTML=all.length?all.map(row).join(''):'<p class="lead">Nothing saved yet.</p>';
+ $('#recent').innerHTML=all.length?`<h3>From your library</h3><div class="lib">${all.slice(0,4).map(row).join('')}</div>`:''}
+document.addEventListener('click',async e=>{const o=e.target.closest('[data-open]'),d=e.target.closest('[data-del]');
+ if(o){const x=await DB.get(o.dataset.open);if(!x)return;if(S.dirty&&!(await ask('Open another form?','Your entries on the current form have not been downloaded or saved.','Open anyway')))return;await openBytes(new Uint8Array(x.bytes),x.name.replace(/\.pdf$/i,'')+'.pdf',x);if(innerWidth<900)$('#side').classList.remove('open')}
+ if(d){const x=await DB.get(d.dataset.del);if(x&&await ask('Delete from library?',`“${x.name}” will be removed from this browser.`,'Delete')){await DB.del(x.id);if(S.doc?.id===x.id)S.doc.id=null;renderLib();renderLibSave()}}});
+
+/* ---------- export ---------- */
+const MAP={'‘':"'",'’':"'",'“':'"','”':'"','–':'-','—':'-','…':'...','•':'*','✓':'v','✔':'v',' ':' ','\t':'    '};
+async function build(flatten){
+ const L=window.PDFLib;const d=await L.PDFDocument.load(S.doc.bytes,{ignoreEncryption:true});const font=await d.embedFont(L.StandardFonts.Helvetica);
+ const cs=new Set(font.getCharacterSet());const safe=s=>[...String(s||'')].map(ch=>ch==='\n'||cs.has(ch.codePointAt(0))?ch:(MAP[ch]??(ch.normalize('NFKD').replace(/[^\x20-\x7e]/g,'')||'?'))).join('');
+ const issues=[];const pages=d.getPages();
+ const rgbHex=h=>{const n=parseInt(String(h||'#1a1a1a').slice(1),16);return L.rgb((n>>16&255)/255,(n>>8&255)/255,(n&255)/255)};
+ const drawIn=(f,txt)=>{for(const w of f.widgets){const p=pages[w.page-1];const[x1,y1,x2,y2]=nrect(w.rect);const sz=Math.min(11,(y2-y1)*.7);txt.split('\n').forEach((ln,i)=>p.drawText(ln,{x:x1+2,y:y2-sz*(1.05+i*1.2),size:sz,font,color:L.rgb(0,0,0),maxWidth:x2-x1-4}))}};
+ if(S.fields.length){let form=null;try{form=d.getForm()}catch{}
+  for(const f of S.fields){const v=S.values[f.name]??'';if(v===(S.init[f.name]??''))continue;
+   let pf=null;try{pf=form&&form.getField(f.name)}catch{}
+   try{if(!pf)throw 0;
+    if(pf instanceof L.PDFTextField){let t=safe(v);if(!f.multi)t=t.replace(/\n/g,' ');const ml=pf.getMaxLength();if(ml&&t.length>ml)t=t.slice(0,ml);pf.setText(t)}
+    else if(pf instanceof L.PDFCheckBox){v?pf.check():pf.uncheck()}
+    else if(pf instanceof L.PDFRadioGroup){if(!v)pf.clear();else{const opts=pf.getOptions();if(opts.includes(v))pf.select(v);else{const i=f.widgets.findIndex(w=>w.on===v);if(i>=0&&opts[i]!=null)pf.select(opts[i]);else throw 0}}}
+    else if(pf instanceof L.PDFDropdown||pf instanceof L.PDFOptionList){if(!v)pf.clear();else pf.select(safe(v))}
+    else throw 0}
+   catch(e){if(f.type==='text'&&v){try{if(pf instanceof L.PDFTextField)pf.setText('');}catch{}drawIn(f,safe(v));}else issues.push(label(f))}}
+  if(form){try{form.updateFieldAppearances(font)}catch{}if(flatten)try{form.flatten({updateFieldAppearances:false})}catch(e){issues.push('flattening')}}}
+ for(const o of S.overlays){const p=pages[o.page-1];if(!p)continue;const c=rgbHex(o.color);
+  if(o.kind==='text'){safe(o.text).split('\n').forEach((ln,i)=>{if(ln)p.drawText(ln,{x:o.x+1,y:o.y-o.size*(0.95+i*1.2),size:o.size,font,color:c})})}
+  else if(o.kind==='check')p.drawSvgPath(`M ${o.w*.15} ${o.h*.55} L ${o.w*.4} ${o.h*.8} L ${o.w*.85} ${o.h*.18}`,{x:o.x,y:o.y,borderColor:c,borderWidth:Math.max(.8,Math.min(o.w,o.h)*.13),borderLineCap:L.LineCapStyle.Round});
+  else if(o.kind==='cross'){const t=Math.max(.8,Math.min(o.w,o.h)*.12);p.drawLine({start:{x:o.x+o.w*.18,y:o.y-o.h*.18},end:{x:o.x+o.w*.82,y:o.y-o.h*.82},thickness:t,color:c,lineCap:L.LineCapStyle.Round});p.drawLine({start:{x:o.x+o.w*.82,y:o.y-o.h*.18},end:{x:o.x+o.w*.18,y:o.y-o.h*.82},thickness:t,color:c,lineCap:L.LineCapStyle.Round})}
+  else if(o.kind==='sig'){const img=await d.embedPng(o.src);p.drawImage(img,{x:o.x,y:o.y-o.h,width:o.w,height:o.h})}}
+ if(flatten){const n=await L.PDFDocument.create();const cp=await n.copyPages(d,d.getPageIndices());cp.forEach(pg=>{n.addPage(pg);const an=pg.node.Annots();if(an)for(let i=an.size()-1;i>=0;i--){try{if(!n.context.lookup(an.get(i)))an.remove(i)}catch{an.remove(i)}}});return{out:await n.save(),issues}}
+ return{out:await d.save(),issues}}
+$('#dl').onclick=async()=>{if(!S.doc)return;busy(true);let res;try{res=await build($('#flat').checked)}catch(e){busy(false);console.error(e);toast('Could not build the PDF: '+(e?.message||e),true);return}busy(false);
+ const name=S.doc.name.replace(/\.pdf$/i,'')+'-filled.pdf';const blob=new Blob([res.out],{type:'application/pdf'});
+ if(DL){try{await DL.save({filename:name,data:blob});S.dirty=false;toast('Saved '+name)}catch(e){toast(e?.code==='declined'?'Download cancelled.':e?.code==='rate_limited'?'A save prompt is already open.':'Download failed: '+(e?.message||e?.code||e),true);return}}
+ else{const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),5000);S.dirty=false;toast('Downloaded '+name)}
+ if(res.issues.length)setTimeout(()=>toast('Could not set: '+res.issues.slice(0,4).join(', ')+(res.issues.length>4?'…':''),true),1200)};
+
+/* ---------- sample form ---------- */
+async function sample(){const L=window.PDFLib;if(!L){toast('The PDF libraries did not load.',true);return}
+ const d=await L.PDFDocument.create();const p=d.addPage([612,792]);const f=await d.embedFont(L.StandardFonts.Helvetica),fb=await d.embedFont(L.StandardFonts.HelveticaBold);const form=d.getForm();
+ const g=L.rgb(0,.27,.235),grey=L.rgb(.42,.45,.44),bc=L.rgb(.55,.6,.58);
+ p.drawRectangle({x:0,y:742,width:612,height:50,color:g});p.drawText('Specialist referral',{x:54,y:760,size:20,font:fb,color:L.rgb(1,1,1)});p.drawText('Sample form made by Form Desk. Not a real form.',{x:340,y:763,size:9,font:f,color:L.rgb(.85,.93,.88)});
+ let y=700;const sec=t=>{p.drawText(t,{x:54,y,size:12,font:fb,color:g});p.drawLine({start:{x:54,y:y-6},end:{x:558,y:y-6},thickness:.7,color:bc});y-=40};
+ const tf=(lab,name,x,w,h=18,multi)=>{p.drawText(lab,{x,y:y+h+5,size:8.5,font:f,color:grey});const t=form.createTextField(name);if(multi)t.enableMultiline();t.addToPage(p,{x,y,width:w,height:h,borderColor:bc,borderWidth:.7,font:f});t.setFontSize(multi?10:0)};
+ const cb=(lab,name,x)=>{const c=form.createCheckBox(name);c.addToPage(p,{x,y:y+3,width:11,height:11,borderColor:bc,borderWidth:.8});p.drawText(lab,{x:x+16,y:y+5,size:9.5,font:f})};
+ sec('Patient');tf('Patient name','patient_name',54,300);tf('Personal health number (PHN)','patient_phn',370,188);y-=44;
+ tf('Date of birth','patient_dob',54,140);p.drawText('Sex',{x:214,y:y+23,size:8.5,font:f,color:grey});const rg=form.createRadioGroup('patient_sex');[['F',214],['M',262],['X',310]].forEach(([v,x])=>{rg.addOptionToPage(v,p,{x,y:y+3,width:11,height:11,borderColor:bc,borderWidth:.8});p.drawText(v==='F'?'Female':v==='M'?'Male':'X',{x:x+15,y:y+5,size:9.5,font:f})});
+ tf('Patient phone','patient_phone',370,188);y-=56;
+ sec('Referring physician');tf('Physician name','Text1',54,300);tf('MSP practitioner number','msp_number',370,188);y-=44;tf('Clinic address','clinic_address',54,504);y-=44;
+ tf('Phone','phys_phone',54,150);tf('Fax','Text7',220,150);tf('Email','phys_email',386,172);y-=56;
+ sec('Referral');p.drawText('Requested service',{x:54,y:y+23,size:8.5,font:f,color:grey});const dd=form.createDropdown('service');dd.setOptions(['Consultation','Assessment and treatment','Second opinion','Medication review']);dd.addToPage(p,{x:54,y,width:250,height:18,borderColor:bc,borderWidth:.7,font:f});
+ y-=30;cb('Urgent: seen within 2 weeks','urgent',54);cb('Patient consents to referral','consent',260);y-=96;tf('Reason for referral','reason',54,504,78,true);y-=50;
+ sec('Sign-off (this part has no fields; use Sign and Date)');p.drawText('Signature',{x:54,y:y-2,size:9,font:f,color:grey});p.drawLine({start:{x:100,y:y-4},end:{x:330,y:y-4},thickness:.7,color:L.rgb(0,0,0)});p.drawText('Date',{x:360,y:y-2,size:9,font:f,color:grey});p.drawLine({start:{x:388,y:y-4},end:{x:558,y:y-4},thickness:.7,color:L.rgb(0,0,0)});
+ return d.save()}
+$('#samplebtn').onclick=async()=>{const b=await sample();if(b)openBytes(new Uint8Array(b),'Sample referral.pdf')};
+
+/* ---------- file open & drop ---------- */
+$('#openbtn').onclick=()=>$('#file').click();
+$('#file').onchange=e=>{openFile(e.target.files[0]);e.target.value=''};
+let dc=0;const hasFiles=e=>[...(e.dataTransfer?.types||[])].includes('Files');
+addEventListener('dragenter',e=>{if(!hasFiles(e))return;e.preventDefault();dc++;$('#dropcover').classList.add('on')});
+addEventListener('dragleave',e=>{if(!hasFiles(e))return;dc=Math.max(0,dc-1);if(!dc)$('#dropcover').classList.remove('on')});
+addEventListener('dragover',e=>{if(hasFiles(e))e.preventDefault()});
+addEventListener('drop',e=>{if(!hasFiles(e))return;e.preventDefault();dc=0;$('#dropcover').classList.remove('on');const f=[...e.dataTransfer.files].find(f=>/pdf/i.test(f.type)||/\.pdf$/i.test(f.name));f?openFile(f):toast('Drop a PDF file.',true)});
+
+/* ---------- tabs, keys, startup ---------- */
+$$('.tab').forEach(t=>t.onclick=()=>{$$('.tab').forEach(x=>x.classList.toggle('on',x===t));$$('.pane').forEach(p=>p.classList.toggle('on',p.id==='p-'+t.dataset.tab))});
+$('#sheetbtn').onclick=()=>$('#side').classList.toggle('open');
+addEventListener('keydown',e=>{const typing=/INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName||'');
+ if(e.key==='Escape'){if($('#modal').classList.contains('on')){$('#modal').classList.remove('on');return}setTool('fill');select(null);if(typing&&document.activeElement.closest('.ov'))document.activeElement.blur()}
+ if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'&&!typing){e.preventDefault();e.shiftKey?redo():undo()}
+ if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='y'&&!typing){e.preventDefault();redo()}
+ if((e.key==='Delete'||e.key==='Backspace')&&S.sel&&!typing){e.preventDefault();delOv(S.sel)}});
+addEventListener('beforeunload',e=>{if(S.dirty){e.preventDefault();e.returnValue=''}});
+renderProfile();renderLib();renderLibSave();setReady();
+if(window.claude?.use){claude.use('downloads').then(d=>{DL=d}).catch(()=>{});claude.use('sample').then(s=>{AI=s;setReady()}).catch(()=>{})}
+if(!PJ||!window.PDFLib)toast('The PDF libraries did not load. Check your connection and reload.',true);
+}
+</script>
+</body>
+</html>
