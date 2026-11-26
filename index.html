@@ -80,7 +80,17 @@ select.w{padding:0 2px}
 #ovbar .sz{font-size:12px;min-width:30px;text-align:center;font-variant-numeric:tabular-nums}
 #ovbar input{width:150px;height:30px;border:0;border-radius:6px;background:rgba(255,255,255,.12);padding:0 8px;font-size:13px;color:#fff}
 #ovbar input::placeholder{color:#9fb5ad}
-aside{background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0}
+aside{background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0;position:relative}
+#rvp{position:absolute;inset:0;z-index:8;background:var(--panel);display:flex;flex-direction:column;border-radius:inherit;animation:rvin .18s ease-out}
+@keyframes rvin{from{transform:translateX(24px);opacity:0}}
+.rvh{display:flex;gap:12px;align-items:flex-start;padding:14px 18px;border-bottom:1px solid var(--line)}
+.rvh h2{font-size:19px}
+.rvb{flex:1;overflow:auto;padding:6px 0}
+.rvall{display:flex;align-items:center;gap:8px;padding:10px 18px;font-size:13.5px;color:var(--mute)}
+.rvall input{width:18px;height:18px;accent-color:var(--g)}
+#rvp .rvi{padding:10px 18px}
+.rvf{padding:14px 18px;border-top:1px solid var(--line);background:var(--panel)}
+.btn.big{width:100%;min-height:50px;font-size:16px;font-weight:600;border-radius:11px}
 .tabs{display:flex;border-bottom:1px solid var(--line);padding:0 8px}
 .tab{flex:1;height:48px;border:0;background:none;font-size:13.5px;font-weight:500;color:var(--mute);border-bottom:2px solid transparent;margin-bottom:-1px}
 .tab.on{color:var(--ink);border-color:var(--g)}
@@ -251,6 +261,7 @@ details summary{cursor:pointer;font-size:13px;color:var(--mute);margin-top:16px}
     <div id="pages"></div>
   </div>
   <aside id="side">
+    <div id="rvp" hidden role="dialog" aria-label="Review matches"></div>
     <div class="tabs" role="tablist">
       <button class="tab on" data-tab="fields" role="tab">Fields</button>
       <button class="tab" data-tab="profile" role="tab">Profile</button>
@@ -315,7 +326,7 @@ const uid=()=>Math.random().toString(36).slice(2,10);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const store={get(k,d){try{const v=localStorage.getItem('fd.'+k);return v==null?d:JSON.parse(v)}catch{return d}},set(k,v){try{localStorage.setItem('fd.'+k,JSON.stringify(v))}catch{}}};
 
-const P={cursor:'<path d="M5 3l14 8-6 2-3 6z"/>',type:'<path d="M5 7V5h14v2M9 19h6M12 5v14"/>',cal:'<rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',check:'<path d="M5 12.5l4.5 4.5L19 7"/>',x:'<path d="M6 6l12 12M18 6L6 18"/>',sign:'<path d="M3 17c2.5-5 4.5-9 6-9 2 0-1 8 1 8s3-5 5-5-0 4 2 4 2-2 4-2"/><path d="M3 21h18"/>',dl:'<path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/>',plus:'<path d="M12 5v14M5 12h14"/>',minus:'<path d="M5 12h14"/>',undo:'<path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 010 11H11"/>',redo:'<path d="M15 14l5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 000 11H13"/>',trash:'<path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/>',file:'<path d="M14 3H6.5v18h11V6.5z"/><path d="M14 3v3.5h3.5"/>',open:'<path d="M3 7V5.5A1.5 1.5 0 014.5 4H9l2 2.5h8.5A1.5 1.5 0 0121 8v1"/><path d="M3 9h18l-2 10H5z"/>',pen:'<path d="M4 20h4L19 9l-4-4L4 16z"/>',list:'<path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/>',circ:'<circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="3" fill="currentColor"/>',box:'<rect x="4.5" y="4.5" width="15" height="15" rx="2.5"/><path d="M8.5 12.2l2.4 2.4 4.6-5"/>',sel:'<rect x="3.5" y="6" width="17" height="12" rx="2"/><path d="M14.5 11l2 2 2-2"/>'};
+const P={cursor:'<path d="M5 3l14 8-6 2-3 6z"/>',type:'<path d="M5 7V5h14v2M9 19h6M12 5v14"/>',cal:'<rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',check:'<path d="M5 12.5l4.5 4.5L19 7"/>',x:'<path d="M6 6l12 12M18 6L6 18"/>',sign:'<path d="M3 17c2.5-5 4.5-9 6-9 2 0-1 8 1 8s3-5 5-5-0 4 2 4 2-2 4-2"/><path d="M3 21h18"/>',dl:'<path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/>',plus:'<path d="M12 5v14M5 12h14"/>',minus:'<path d="M5 12h14"/>',undo:'<path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 010 11H11"/>',redo:'<path d="M15 14l5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 000 11H13"/>',trash:'<path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/>',file:'<path d="M14 3H6.5v18h11V6.5z"/><path d="M14 3v3.5h3.5"/>',back:'<path d="M15 18l-6-6 6-6"/>',open:'<path d="M3 7V5.5A1.5 1.5 0 014.5 4H9l2 2.5h8.5A1.5 1.5 0 0121 8v1"/><path d="M3 9h18l-2 10H5z"/>',pen:'<path d="M4 20h4L19 9l-4-4L4 16z"/>',list:'<path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/>',circ:'<circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="3" fill="currentColor"/>',box:'<rect x="4.5" y="4.5" width="15" height="15" rx="2.5"/><path d="M8.5 12.2l2.4 2.4 4.6-5"/>',sel:'<rect x="3.5" y="6" width="17" height="12" rx="2"/><path d="M14.5 11l2 2 2-2"/>'};
 const ic=(n,s=18)=>`<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[n]}</svg>`;
 
 const TOOLS=[['fill','cursor','Fill'],['text','type','Text'],['date','cal','Date'],['check','check','Check'],['cross','x','Cross'],['sig','sign','Sign']];
@@ -553,11 +564,20 @@ function coerce(t,raw){const s=String(raw??'').trim();if(t.o)return s;const f=t.
  if(f.maxLen&&s.length>f.maxLen)return s.slice(0,f.maxLen);return s}
 function applyTo(t,val){if(t.o){t.o.text=val;fitText(t.o);rerenderOv(t.o)}else{S.values[t.f.name]=val;syncField(t.f.name)}}
 function review(host,props,title){
+ const box=$('#rvp');
  if(!props.length){host.innerHTML='<div class="note" style="margin-top:14px">Nothing to fill: no field on this form matched.</div>';return}
- host.innerHTML=`<div class="rv"><h3>${esc(title)} · ${props.length} field${props.length>1?'s':''}</h3>${props.map((p,i)=>`<div class="rvi"><input type="checkbox" checked data-i="${i}" aria-label="Use"><div><div class="lb">${esc(p.t.label)}${p.from?` <span class="from">← ${esc(p.from)}</span>`:''}</div><input class="inp" data-v="${i}" value="${esc(p.value)}" aria-label="Value for ${esc(p.t.label)}"></div></div>`).join('')}<div class="row"><button class="btn go" data-a="apply">Fill these in</button><button class="btn" data-a="cancel">Discard</button></div></div>`;
- host.onclick=e=>{const a=e.target.closest('[data-a]')?.dataset.a;if(!a)return;if(a==='cancel'){host.innerHTML='';return}
-  checkpoint(true);let n=0;props.forEach((p,i)=>{if(!$(`[data-i="${i}"]`,host).checked)return;const v=coerce(p.t,$(`[data-v="${i}"]`,host).value);if(p.t.type!=='checkbox'&&!v&&p.t.type!=='text')return;applyTo(p.t,v);n++});
-  S.dirty=true;host.innerHTML='';renderFields();toast(`Filled ${n} field${n===1?'':'s'}. Undo is in the toolbar.`)}}
+ host.innerHTML='';
+ box.innerHTML=`<div class="rvh"><button class="btn sm" data-a="back" aria-label="Back without filling">${ic('back',16)}Back</button><div><h2>${esc(title)}</h2><p class="lead" style="margin:2px 0 0">Untick or edit anything before filling.</p></div></div>
+ <div class="rvb"><label class="rvall"><input type="checkbox" checked data-a="all"> Select all</label>${props.map((p,i)=>`<div class="rvi"><input type="checkbox" checked data-i="${i}" aria-label="Use ${esc(p.t.label)}"><div><div class="lb">${esc(p.t.label)}${p.from?` <span class="from">← ${esc(p.from)}</span>`:''}</div><input class="inp" data-v="${i}" value="${esc(p.value)}" aria-label="Value for ${esc(p.t.label)}"></div></div>`).join('')}</div>
+ <div class="rvf"><button class="btn go big" data-a="apply">${ic('check',18)}<span id="rvn"></span></button></div>`;
+ const upd=()=>{const n=$$('[data-i]',box).filter(c=>c.checked).length;$('#rvn',box).textContent=n?`Fill ${n} field${n>1?'s':''}`:'Nothing selected';$('[data-a="apply"]',box).disabled=!n;$('[data-a="all"]',box).checked=n===props.length};
+ const close=()=>{box.hidden=true;box.innerHTML=''};
+ box.onchange=e=>{if(e.target.dataset.a==='all')$$('[data-i]',box).forEach(c=>c.checked=e.target.checked);upd()};
+ box.onclick=e=>{const a=e.target.closest('button[data-a]')?.dataset.a;if(!a)return;if(a==='back'){close();return}
+  if(a==='apply'){checkpoint(true);let n=0;props.forEach((p,i)=>{if(!$(`[data-i="${i}"]`,box).checked)return;const v=coerce(p.t,$(`[data-v="${i}"]`,box).value);if(p.t.type!=='checkbox'&&!v&&p.t.type!=='text')return;applyTo(p.t,v);n++});
+   S.dirty=true;close();renderFields();toast(`Filled ${n} field${n===1?'':'s'}. Undo is in the toolbar.`)}};
+ box.onkeydown=e=>{if(e.key==='Escape'){e.stopPropagation();close()}};
+ upd();box.hidden=false;$('[data-a="apply"]',box).focus()}
 
 /* ---------- profiles ---------- */
 const DEF_ITEMS=['Full name','MSP practitioner number','College ID','Clinic name','Clinic address','City','Province','Postal code','Phone','Fax','Email','Date'].map(k=>({k,v:k==='Date'?'{today}':''}));
@@ -578,7 +598,7 @@ $('#prdel').onclick=async()=>{if(PR.length<2){toast('Keep at least one profile. 
 $('#datefmt').onchange=e=>store.set('datefmt',e.target.value);
 $('#prapply').onclick=()=>{const p=curProfile();const items=p.items.filter(i=>i.k.trim()&&String(i.v).trim());if(!items.length){toast('Add a value to at least one detail first.');return}
  const props=[];for(const t of targets()){let best=null,bs=0;for(const it of items){const s=score(t.label,it.k);if(s>bs){bs=s;best=it}}if(best&&bs>=.6&&(t.type==='text'||t.type==='select'))props.push({t,value:expand(best.v),from:best.k})}
- review($('#prrev'),props,'Matches from '+p.name)};
+ review($('#prrev'),props,'Fill from '+p.name)};
 /* signature pad */
 function drawSig(after,file){modal(`<h2>Your signature</h2><div class="seg" role="tablist"><button data-m="draw" class="on">Draw</button><button data-m="up">Upload image</button></div>
 <div data-p="draw"><p>Sign with a mouse, trackpad, finger or stylus.</p><canvas id="sigc" width="900" height="300"></canvas></div>
@@ -632,7 +652,7 @@ $('#sigup').onchange=e=>{const f=e.target.files[0];e.target.value='';if(f)drawSi
 $('#kvbtn').onclick=()=>{const T=targets();const props=[];const seen=new Set();
  for(const line of $('#smtext').value.split('\n')){const i=line.indexOf(':');if(i<1)continue;const k=line.slice(0,i).trim(),v=line.slice(i+1).trim();if(!v)continue;
   let best=null,bs=0;for(const t of T){const s=score(k,t.label);if(s>bs){bs=s;best=t}}if(best&&bs>=.6&&!seen.has(best.id)){seen.add(best.id);props.push({t:best,value:v,from:k})}}
- review($('#smrev'),props,'Matched lines')};
+ review($('#smrev'),props,'Fill from pasted lines')};
 function renderTemplate(){$('#tpl').value=targets().map(t=>`${t.label}: `).join('\n')}
 $('#tplcopy').onclick=async()=>{try{await navigator.clipboard.writeText($('#tpl').value);toast('Template copied.')}catch{$('#tpl').select();toast('Press Ctrl+C (⌘C) to copy.')}};
 
