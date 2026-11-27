@@ -43,6 +43,9 @@ h1,h2,h3{font-family:"Inter Tight",Inter,sans-serif;margin:0;line-height:1.1}
 .ink.on{border-color:var(--lime)}
 .primary{display:flex;align-items:center;gap:7px;height:40px;padding:0 16px;border:0;border-radius:9px;background:var(--lime);color:var(--g);font-weight:600;white-space:nowrap}
 .primary:disabled{opacity:.5;cursor:default}
+.ghost{display:flex;align-items:center;gap:7px;height:40px;padding:0 14px;border:1.5px solid rgba(230,245,200,.55);border-radius:9px;background:transparent;color:var(--lime);font-weight:600;white-space:nowrap}
+.ghost:hover{background:rgba(230,245,200,.1);border-color:var(--lime)}
+.ghost:disabled{opacity:.4;cursor:default}
 .flat{display:flex;align-items:center;gap:6px;font-size:13px;color:#cfe3d9;white-space:nowrap}
 .flat input{accent-color:var(--lime);width:16px;height:16px}
 main{display:grid;grid-template-columns:minmax(0,1fr) 370px;min-height:0}
@@ -81,7 +84,7 @@ select.w{padding:0 2px}
 #ovbar input{width:150px;height:30px;border:0;border-radius:6px;background:rgba(255,255,255,.12);padding:0 8px;font-size:13px;color:#fff}
 #ovbar input::placeholder{color:#9fb5ad}
 aside{background:var(--panel);border-left:1px solid var(--line);display:flex;flex-direction:column;min-height:0;position:relative}
-#rvp{position:absolute;inset:0;z-index:8;background:var(--panel);display:flex;flex-direction:column;border-radius:inherit;animation:rvin .18s ease-out}
+#rvp{position:absolute;inset:0;z-index:8;background:var(--panel);display:flex;flex-direction:column;border-radius:inherit;animation:rvin .12s ease-out}
 @keyframes rvin{from{transform:translateX(24px);opacity:0}}
 .rvh{display:flex;gap:12px;align-items:flex-start;padding:14px 18px;border-bottom:1px solid var(--line)}
 .rvh h2{font-size:19px}
@@ -184,7 +187,7 @@ details summary{cursor:pointer;font-size:13px;color:var(--mute);margin-top:16px}
 @keyframes sp{to{transform:rotate(360deg)}}
 .sheet{display:none}
 @media (max-width:1500px){.docname{display:none}}
-@media (max-width:1250px){.tb span{display:none}.tb{padding:0 10px}}
+@media (max-width:1400px){.tb span{display:none}.tb{padding:0 10px}}
 @media (max-width:900px){
  main{grid-template-columns:minmax(0,1fr)}
  aside{position:fixed;left:0;right:0;bottom:0;height:62vh;z-index:40;border-left:0;border-top:1px solid var(--line);border-radius:16px 16px 0 0;transform:translateY(100%);transition:transform .25s;box-shadow:0 -10px 40px rgba(0,0,0,.25)}
@@ -194,8 +197,8 @@ details summary{cursor:pointer;font-size:13px;color:var(--mute);margin-top:16px}
  .flat{display:none}
  #desk{padding:18px 10px 60px}
 }
-@media (max-width:600px){.docname{display:none}.zl{display:none}}
-@media (prefers-reduced-motion:reduce){*{transition:none!important;animation-duration:2s!important}}
+@media (max-width:600px){.docname{display:none}.zl{display:none}.ghost span{display:none}.ghost{padding:0 11px}}
+@media (prefers-reduced-motion:reduce){*:not(.spin){transition:none!important;animation:none!important}}
 </style>
 </head>
 <body>
@@ -222,6 +225,7 @@ details summary{cursor:pointer;font-size:13px;color:var(--mute);margin-top:16px}
   </div>
   <label class="flat" title="Bake the answers into the page so they can no longer be edited"><input type="checkbox" id="flat"> Flatten</label>
   <button class="tb sheet" id="sheetbtn">Panel</button>
+  <button class="ghost" id="savebtn" disabled title="Save this form with your entries to the library (Ctrl+S)"></button>
   <button class="primary" id="dl" disabled></button>
 </header>
 <main>
@@ -326,13 +330,13 @@ const uid=()=>Math.random().toString(36).slice(2,10);
 const clamp=(v,a,b)=>Math.max(a,Math.min(b,v));
 const store={get(k,d){try{const v=localStorage.getItem('fd.'+k);return v==null?d:JSON.parse(v)}catch{return d}},set(k,v){try{localStorage.setItem('fd.'+k,JSON.stringify(v))}catch{}}};
 
-const P={cursor:'<path d="M5 3l14 8-6 2-3 6z"/>',type:'<path d="M5 7V5h14v2M9 19h6M12 5v14"/>',cal:'<rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',check:'<path d="M5 12.5l4.5 4.5L19 7"/>',x:'<path d="M6 6l12 12M18 6L6 18"/>',sign:'<path d="M3 17c2.5-5 4.5-9 6-9 2 0-1 8 1 8s3-5 5-5-0 4 2 4 2-2 4-2"/><path d="M3 21h18"/>',dl:'<path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/>',plus:'<path d="M12 5v14M5 12h14"/>',minus:'<path d="M5 12h14"/>',undo:'<path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 010 11H11"/>',redo:'<path d="M15 14l5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 000 11H13"/>',trash:'<path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/>',file:'<path d="M14 3H6.5v18h11V6.5z"/><path d="M14 3v3.5h3.5"/>',back:'<path d="M15 18l-6-6 6-6"/>',open:'<path d="M3 7V5.5A1.5 1.5 0 014.5 4H9l2 2.5h8.5A1.5 1.5 0 0121 8v1"/><path d="M3 9h18l-2 10H5z"/>',pen:'<path d="M4 20h4L19 9l-4-4L4 16z"/>',list:'<path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/>',circ:'<circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="3" fill="currentColor"/>',box:'<rect x="4.5" y="4.5" width="15" height="15" rx="2.5"/><path d="M8.5 12.2l2.4 2.4 4.6-5"/>',sel:'<rect x="3.5" y="6" width="17" height="12" rx="2"/><path d="M14.5 11l2 2 2-2"/>'};
+const P={cursor:'<path d="M5 3l14 8-6 2-3 6z"/>',type:'<path d="M5 7V5h14v2M9 19h6M12 5v14"/>',cal:'<rect x="3.5" y="5" width="17" height="15.5" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4"/>',check:'<path d="M5 12.5l4.5 4.5L19 7"/>',x:'<path d="M6 6l12 12M18 6L6 18"/>',sign:'<path d="M3 17c2.5-5 4.5-9 6-9 2 0-1 8 1 8s3-5 5-5-0 4 2 4 2-2 4-2"/><path d="M3 21h18"/>',dl:'<path d="M12 4v11M7 10.5l5 5 5-5M5 20h14"/>',plus:'<path d="M12 5v14M5 12h14"/>',minus:'<path d="M5 12h14"/>',undo:'<path d="M9 14L4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 010 11H11"/>',redo:'<path d="M15 14l5-5-5-5"/><path d="M20 9H9.5a5.5 5.5 0 000 11H13"/>',trash:'<path d="M4 7h16M9.5 7V4.5h5V7M6.5 7l1 13h9l1-13"/>',file:'<path d="M14 3H6.5v18h11V6.5z"/><path d="M14 3v3.5h3.5"/>',save:'<path d="M5 4h11l3 3v13H5z"/><path d="M8 4v5h7V4M8 20v-6h8v6"/>',back:'<path d="M15 18l-6-6 6-6"/>',open:'<path d="M3 7V5.5A1.5 1.5 0 014.5 4H9l2 2.5h8.5A1.5 1.5 0 0121 8v1"/><path d="M3 9h18l-2 10H5z"/>',pen:'<path d="M4 20h4L19 9l-4-4L4 16z"/>',list:'<path d="M9 6h11M9 12h11M9 18h11M4.5 6h.01M4.5 12h.01M4.5 18h.01"/>',circ:'<circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="3" fill="currentColor"/>',box:'<rect x="4.5" y="4.5" width="15" height="15" rx="2.5"/><path d="M8.5 12.2l2.4 2.4 4.6-5"/>',sel:'<rect x="3.5" y="6" width="17" height="12" rx="2"/><path d="M14.5 11l2 2 2-2"/>'};
 const ic=(n,s=18)=>`<svg viewBox="0 0 24 24" width="${s}" height="${s}" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[n]}</svg>`;
 
 const TOOLS=[['fill','cursor','Fill'],['text','type','Text'],['date','cal','Date'],['check','check','Check'],['cross','x','Cross'],['sig','sign','Sign']];
 $('#tools').innerHTML=TOOLS.map(([k,i,l])=>`<button class="tb${k==='fill'?' on':''}" data-tool="${k}" title="${l}" aria-label="${l}">${ic(i)}<span>${l}</span></button>`).join('');
 $('#zout').innerHTML=ic('minus');$('#zin').innerHTML=ic('plus');$('#undo').innerHTML=ic('undo');$('#redo').innerHTML=ic('redo');
-$('#dl').innerHTML=ic('dl')+'Download';$('#openbtn').innerHTML=ic('open')+'Open a PDF';
+$('#savebtn').innerHTML=ic('save')+'<span>Save</span>';$('#dl').innerHTML=ic('dl')+'Download';$('#openbtn').innerHTML=ic('open')+'Open a PDF';
 
 const S={doc:null,pdf:null,pages:[],fields:[],fmap:new Map(),values:{},init:{},labels:{},overlays:[],tool:'fill',sel:null,scale:1,fit:true,ink:'#1a1a1a',fsize:10,hist:[],future:[],lastCk:0,dirty:false};
 let DL=null;
@@ -419,7 +423,7 @@ async function openBytes(bytes,name,saved){
   S.init={...S.values};
   if(saved?.values)for(const k in saved.values)if(S.fmap.has(k))S.values[k]=saved.values[k];
   let xfa=false;try{const md=await pdf.getMetadata();xfa=!!md?.info?.IsXFAPresent}catch{}
-  $('#empty').style.display='none';$('#docname').textContent=name;$('#fdoc').textContent=name+' · ';$('#dl').disabled=false;
+  $('#empty').style.display='none';$('#savebtn').disabled=false;$('#docname').textContent=name;$('#fdoc').textContent=name+' · ';$('#dl').disabled=false;
   S.fit=true;layout();renderFields();renderTemplate();renderLibSave();updUndo();
   if(xfa&&!S.fields.length)toast('This is an XFA (LiveCycle) form. Browsers cannot fill these directly; use Text and Check to write on it instead.',true);
   else toast(S.fields.length?`${S.fields.length} fillable field${S.fields.length>1?'s':''} found`:'No fillable fields. Use Text, Date, Check and Sign to write on it.');
@@ -662,12 +666,15 @@ const DB={p:null,open(){return this.p||(this.p=new Promise((res,rej)=>{try{const
  all(){return this.run('readonly',s=>s.getAll())},get(id){return this.run('readonly',s=>s.get(id))},put(v){return this.run('readwrite',s=>s.put(v))},del(id){return this.run('readwrite',s=>s.delete(id))}};
 function renderLibSave(){const h=$('#libsave');if(!S.pdf){h.innerHTML='<div class="note">Open a PDF to save it here.</div>';return}
  h.innerHTML=`<label class="f" for="libname">Name</label><input class="inp" id="libname" value="${esc(S.doc.name.replace(/\.pdf$/i,''))}"><div class="row" style="margin-top:10px"><button class="btn go" data-a="full">${S.doc.id&&!S.doc.blank?'Update saved copy':'Save with entries'}</button><button class="btn" data-a="blank">Save as blank template</button></div>`;
- h.onclick=async e=>{const a=e.target.closest('[data-a]')?.dataset.a;if(!a)return;const blank=a==='blank';const name=$('#libname').value.trim()||S.doc.name;
-  const values={};if(!blank)Object.assign(values,S.values);
-  const overlays=S.overlays.filter(o=>!blank||o.kind==='text').map(o=>blank?{...o,text:o.label==='Date'?today():''}:{...o});
-  const id=(!blank&&S.doc.id&&!S.doc.blank)?S.doc.id:uid();
-  try{await DB.put({id,name,bytes:S.doc.bytes.buffer.slice(0),values,labels:S.labels,overlays,blank,updated:Date.now(),pages:S.pages.length,size:S.doc.bytes.length});if(!blank){S.doc.id=id;S.dirty=false}toast(blank?'Blank template saved.':'Saved to your library.');renderLib();renderLibSave()}
-  catch(err){toast('Could not save here: this browser is blocking storage.',true)}}}
+ h.onclick=e=>{const a=e.target.closest('[data-a]')?.dataset.a;if(a)saveToLib(a==='blank')}}
+async function saveToLib(blank){if(!S.pdf)return;const name=($('#libname')?.value||'').trim()||S.doc.libname||S.doc.name.replace(/\.pdf$/i,'');
+ const values={};if(!blank)Object.assign(values,S.values);
+ const overlays=S.overlays.filter(o=>!blank||o.kind==='text').map(o=>blank?{...o,text:o.label==='Date'?today():''}:{...o});
+ const update=!blank&&S.doc.id&&!S.doc.blank;const id=update?S.doc.id:uid();
+ try{await DB.put({id,name,bytes:S.doc.bytes.buffer.slice(0),values,labels:S.labels,overlays,blank,updated:Date.now(),pages:S.pages.length,size:S.doc.bytes.length});
+  if(!blank){S.doc.id=id;S.doc.blank=false;S.doc.libname=name;S.dirty=false}
+  toast(blank?`Blank template “${name}” saved to your library.`:update?`Library copy of “${name}” updated.`:`“${name}” saved to your library.`);renderLib();renderLibSave()}
+ catch(err){toast('Could not save here: this browser is blocking storage.',true)}}
 async function renderLib(){let all=[];try{all=(await DB.all()).sort((a,b)=>b.updated-a.updated)}catch{}
  const row=x=>`<div class="li"><span class="ic">${ic('file',18)}</span><div><b>${esc(x.name)}</b><small>${x.pages} page${x.pages>1?'s':''} · ${new Date(x.updated).toLocaleDateString()}<span class="tag">${x.blank?'Template':'With entries'}</span></small></div><div class="row"><button class="btn sm" data-open="${esc(x.id)}">Open</button><button class="x" style="width:34px;height:34px" data-del="${esc(x.id)}" title="Delete" aria-label="Delete ${esc(x.name)}">${ic('trash',16)}</button></div></div>`;
  $('#liblist').innerHTML=all.length?all.map(row).join(''):'<p class="lead">Nothing saved yet.</p>';
@@ -781,6 +788,7 @@ async function sample(){const L=window.PDFLib;if(!L){toast('The PDF libraries di
  return d.save()}
 $('#samplebtn').onclick=async()=>{const b=await sample();if(b)openBytes(new Uint8Array(b),'Sample referral.pdf')};
 
+$('#savebtn').onclick=()=>saveToLib(false);
 /* ---------- home ---------- */
 async function goHome(){
  if(S.pdf){if(S.dirty&&!(await ask('Leave this form?','Your entries on the current form have not been downloaded or saved to the library.','Leave')))return;
@@ -789,7 +797,7 @@ async function goHome(){
   Object.assign(S,{pdf:null,doc:null,pages:[],fields:[],fmap:new Map(),values:{},init:{},labels:{},overlays:[],hist:[],future:[],dirty:false});
   $('#pages').innerHTML='';$('#docname').textContent='';$('#fdoc').textContent='';$('#fcount').textContent='Open a PDF to see its fields.';
   $('#flist').innerHTML='';$('#prrev').innerHTML='';$('#smrev').innerHTML='';$('#tpl').value='';$('#fq').value='';
-  $('#dl').disabled=true;$('#zl').textContent='100%';$('#kvbtn').disabled=true;$('#prapply').disabled=true;setTool('fill');updUndo();renderLibSave()}
+  $('#dl').disabled=true;$('#savebtn').disabled=true;$('#zl').textContent='100%';$('#kvbtn').disabled=true;$('#prapply').disabled=true;setTool('fill');updUndo();renderLibSave()}
  $('#empty').style.display='';$('#side').classList.remove('open');await renderLib();$('#desk').scrollTop=0}
 $('#home').onclick=goHome;
 
@@ -809,6 +817,7 @@ addEventListener('keydown',e=>{const typing=/INPUT|TEXTAREA|SELECT/.test(documen
  if(e.key==='Escape'){if($('#modal').classList.contains('on')){$('#modal').classList.remove('on');return}setTool('fill');select(null);if(typing&&document.activeElement.closest('.ov'))document.activeElement.blur()}
  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'&&!typing){e.preventDefault();e.shiftKey?redo():undo()}
  if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='y'&&!typing){e.preventDefault();redo()}
+ if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){e.preventDefault();saveToLib(false)}
  if((e.key==='Delete'||e.key==='Backspace')&&S.sel&&!typing){e.preventDefault();delOv(S.sel)}});
 addEventListener('beforeunload',e=>{if(S.dirty){e.preventDefault();e.returnValue=''}});
 renderProfile();renderLib();renderLibSave();
